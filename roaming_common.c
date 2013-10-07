@@ -36,6 +36,7 @@
 #include "cipher.h"
 #include "buffer.h"
 #include "roaming.h"
+#include "web10g.h"
 
 static size_t out_buf_size = 0;
 static char *out_buf = NULL;
@@ -64,10 +65,13 @@ int
 get_recv_buf_size()
 {
 	int fd = packet_get_connection_in();
-	int optval;
+	int optval=0;
 	socklen_t optvallen = sizeof(optval);
 
-	if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &optval, &optvallen) != 0)
+	web10g_get_LimRwin(&optval);
+	if (optval!=0)
+		optval *= 2;
+	else
 		optval = DEFAULT_ROAMBUF;
 	return optval;
 }

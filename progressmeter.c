@@ -39,6 +39,7 @@
 #include "progressmeter.h"
 #include "atomicio.h"
 #include "misc.h"
+#include "web10g.h"
 
 #define DEFAULT_WINSIZE 80
 #define MAX_WINSIZE 512
@@ -115,6 +116,69 @@ format_size(char *buf, int size, off_t bytes)
 	    i ? "B" : " ");
 }
 
+static void
+format_retrans(char *buf, int size, u_int32_t retrans)
+{
+	snprintf(buf, size, "%4d", retrans);
+}
+
+static void
+format_samplertt(char *buf, int size, u_int32_t samplertt)
+{
+	snprintf(buf, size, "%4d", samplertt);
+}
+
+static void
+format_limrwin(char *buf, int size, u_int32_t limrwin)
+{
+	snprintf(buf, size, "%10d", limrwin);
+}
+
+/*
+ * Find the pid of the SSH process which is spawned
+ *   from this scp process. This is done by matching
+ *   the parent pid of ssh with the pid of scp,
+ *   since scp will be the parent process of ssh.
+ */
+static pid_t
+_get_sshpid() {
+  FILE *fp1, *fp2;
+  pid_t pid,cpid,ppid,sshpid;
+  char cmd[100];
+  char buffer[100];
+  int i;
+  sshpid = -1;
+  
+  // get scp pid
+  pid = getpid();
+  // find all ssh pids
+  sprintf(cmd, "pidof ssh");
+  fp1 = popen(cmd, "r");
+  // for each ssh pid, find its parent pid in /proc
+  while(fscanf(fp1, "%100s", buffer)>0) {
+    cpid = (pid_t)atoi(buffer);
+    sprintf(cmd, "cat /proc/%d/stat", cpid);
+    fp2 = popen(cmd, "r");
+    i=0;
+    while(fscanf(fp2, "%100s", buffer)>0) {
+      i++;
+      if (i==4) {
+	ppid = (pid_t)atoi(buffer);
+	break;
+      }
+    }
+    // if scp pid matches the ssh ppid, we're done.
+    if (pid==ppid) {
+      sshpid = cpid;
+      pclose(fp2);
+      break;
+    }
+    pclose(fp2);
+  }
+  pclose(fp1);
+  return sshpid;
+}
+
 void
 refresh_progress_meter(void)
 {
@@ -128,6 +192,10 @@ refresh_progress_meter(void)
 	int hours, minutes, seconds;
 	int i, len;
 	int file_len;
+	u_int32_t limrwin,retrans,samplertt;
+	web10g_get_OctetsRetrans(&retrans);
+	web10g_get_SampleRTT(&samplertt);
+	web10g_get_LimRwin(&limrwin);
 
 	transferred = *counter - cur_pos;
 	cur_pos = *counter;
@@ -158,7 +226,7 @@ refresh_progress_meter(void)
 
 	/* filename */
 	buf[0] = '\0';
-	file_len = win_size - 35;
+	file_len = win_size - 56;
 	if (file_len > 0) {
 		len = snprintf(buf, file_len + 1, "\r%s", file);
 		if (len < 0)
@@ -181,6 +249,21 @@ refresh_progress_meter(void)
 	/* amount transferred */
 	format_size(buf + strlen(buf), win_size - strlen(buf),
 	    cur_pos);
+	strlcat(buf, " ", win_size);
+
+	/* LimRwin */
+	format_limrwin(buf + strlen(buf), win_size - strlen(buf),
+	    limrwin);
+	strlcat(buf, " ", win_size);
+	
+	/* SampleRTT */
+	format_samplertt(buf + strlen(buf), win_size - strlen(buf),
+	    samplertt);
+	strlcat(buf, " ", win_size);
+	
+	/* octets retransmitted */
+	format_retrans(buf + strlen(buf), win_size - strlen(buf),
+	    retrans);
 	strlcat(buf, " ", win_size);
 
 	/* bandwidth usage */
@@ -257,6 +340,18 @@ start_progress_meter(char *f, off_t filesize, off_t *ctr)
 	stalled = 0;
 	bytes_per_second = 0;
 
+	web10g_init();
+	/*
+	 * It is important to remember that the scp process
+	 *   works by spawning an ssh process. So, if we desire
+	 *   to have web10g stats on the progressmeter, then
+	 *   we must find the ssh cid, NOT the cid of scp
+	 *   (in fact, scp will not even have a cid).
+	 */
+	pid_t sshpid = _get_sshpid();
+	web10g_find_cid(sshpid);
+	web10g_start_readvars();
+
 	setscreensize();
 	if (can_output())
 		refresh_progress_meter();
@@ -279,6 +374,8 @@ stop_progress_meter(void)
 		refresh_progress_meter();
 
 	atomicio(vwrite, STDOUT_FILENO, "\n", 1);
+	
+	web10g_free();
 }
 
 /*ARGSUSED*/

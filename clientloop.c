@@ -110,6 +110,7 @@
 #include "match.h"
 #include "msg.h"
 #include "roaming.h"
+#include "web10g.h"
 
 /* import options */
 extern Options options;
@@ -1421,6 +1422,9 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	u_int64_t ibytes, obytes;
 	u_int nalloc = 0;
 	char buf[100];
+	//web10g
+	struct estats_error* err = NULL;
+	int cid=0;
 
 	debug("Entering interactive session.");
 
@@ -1436,6 +1440,10 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	connection_out = packet_get_connection_out();
 	max_fd = MAX(connection_in, connection_out);
 
+	web10g_init();
+	web10g_find_cid(getpid());
+	web10g_start_readvars();
+	web10g_thread_file();
 	if (!compat20) {
 		/* enable nonblocking unless tty */
 		if (!isatty(fileno(stdin)))
@@ -1492,6 +1500,8 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		/* Check if we should immediately send eof on stdin. */
 		client_check_initial_eof_on_stdin();
 	}
+
+	cid = web10g_get_cid();
 
 	/* Main loop of the client for the interactive session mode. */
 	while (!quit_pending) {
@@ -1601,6 +1611,8 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		xfree(writeset);
 
 	/* Terminate the session. */
+	Chk(web10g_writerecord(cid));
+	web10g_free();
 
 	/* Stop watching for window change. */
 	signal(SIGWINCH, SIG_DFL);
@@ -1688,6 +1700,16 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	/* Return the exit status of the program. */
 	debug("Exit status %d", exit_status);
 	return exit_status;
+	
+Cleanup:
+	web10g_free();
+	
+	if (err!=NULL) {
+		PRINT_AND_FREE(err);
+		exit(EXIT_FAILURE);
+	}
+	
+	exit(EXIT_SUCCESS);
 }
 
 /*********/
@@ -1829,9 +1851,15 @@ client_request_x11(const char *request_type, int rchan)
 	sock = x11_connect_display();
 	if (sock < 0)
 		return NULL;
+	/* again is this really necessary for X11? */
+	if (options.hpn_disabled)
 	c = channel_new("x11",
 	    SSH_CHANNEL_X11_OPEN, sock, sock, -1,
 	    CHAN_TCP_WINDOW_DEFAULT, CHAN_X11_PACKET_DEFAULT, 0, "x11", 1);
+	else
+		c = channel_new("x11",
+		    SSH_CHANNEL_X11_OPEN, sock, sock, -1,
+		    options.hpn_buffer_size, CHAN_X11_PACKET_DEFAULT, 0, "x11", 1);
 	c->force_drain = 1;
 	return c;
 }
@@ -1851,9 +1879,15 @@ client_request_agent(const char *request_type, int rchan)
 	sock = ssh_get_authentication_socket();
 	if (sock < 0)
 		return NULL;
+	if (options.hpn_disabled)
 	c = channel_new("authentication agent connection",
 	    SSH_CHANNEL_OPEN, sock, sock, -1,
-	    CHAN_X11_WINDOW_DEFAULT, CHAN_TCP_PACKET_DEFAULT, 0,
+		    CHAN_X11_WINDOW_DEFAULT, CHAN_TCP_WINDOW_DEFAULT, 0,
+		    "authentication agent connection", 1);
+	else
+	c = channel_new("authentication agent connection",
+	    SSH_CHANNEL_OPEN, sock, sock, -1,
+	    options.hpn_buffer_size, options.hpn_buffer_size, 0,
 	    "authentication agent connection", 1);
 	c->force_drain = 1;
 	return c;
@@ -1881,9 +1915,17 @@ client_request_tun_fwd(int tun_mode, int local_tun, int remote_tun)
 		return -1;
 	}
 
+	if(options.hpn_disabled)
 	c = channel_new("tun", SSH_CHANNEL_OPENING, fd, fd, -1,
-	    CHAN_TCP_WINDOW_DEFAULT, CHAN_TCP_PACKET_DEFAULT, 0, "tun", 1);
+				CHAN_TCP_WINDOW_DEFAULT, CHAN_TCP_PACKET_DEFAULT,
+				0, "tun", 1);
+	else
+	c = channel_new("tun", SSH_CHANNEL_OPENING, fd, fd, -1,
+				options.hpn_buffer_size, CHAN_TCP_PACKET_DEFAULT,
+				0, "tun", 1);
 	c->datagram = 1;
+
+
 
 #if defined(SSH_TUN_FILTER)
 	if (options.tun_open == SSH_TUNMODE_POINTOPOINT)
