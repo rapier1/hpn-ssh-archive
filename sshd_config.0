@@ -53,10 +53,14 @@ DESCRIPTION
              See PATTERNS in ssh_config(5) for more information on patterns.
 
      AllowTcpForwarding
-             Specifies whether TCP forwarding is permitted.  The default is
-             ``yes''.  Note that disabling TCP forwarding does not improve
-             security unless users are also denied shell access, as they can
-             always install their own forwarders.
+             Specifies whether TCP forwarding is permitted.  The available
+             options are ``yes'' or ``all'' to allow TCP forwarding, ``no'' to
+             prevent all TCP forwarding, ``local'' to allow local (from the
+             perspective of ssh(1)) forwarding only or ``remote'' to allow
+             remote forwarding only.  The default is ``yes''.  Note that
+             disabling TCP forwarding does not improve security unless users
+             are also denied shell access, as they can always install their
+             own forwarders.
 
      AllowUsers
              This keyword can be followed by a list of user name patterns,
@@ -70,6 +74,52 @@ DESCRIPTION
              AllowUsers, DenyGroups, and finally AllowGroups.
 
              See PATTERNS in ssh_config(5) for more information on patterns.
+
+     AuthenticationMethods
+             Specifies the authentication methods that must be successfully
+             completed for a user to be granted access.  This option must be
+             followed by one or more comma-separated lists of authentication
+             method names.  Successful authentication requires completion of
+             every method in at least one of these lists.
+
+             For example, an argument of ``publickey,password
+             publickey,keyboard-interactive'' would require the user to
+             complete public key authentication, followed by either password
+             or keyboard interactive authentication.  Only methods that are
+             next in one or more lists are offered at each stage, so for this
+             example, it would not be possible to attempt password or
+             keyboard-interactive authentication before public key.
+
+             For keyboard interactive authentication it is also possible to
+             restrict authentication to a specific device by appending a colon
+             followed by the device identifier ``bsdauth'', ``pam'', or
+             ``skey'', depending on the server configuration.  For example,
+             ``keyboard-interactive:bsdauth'' would restrict keyboard
+             interactive authentication to the ``bsdauth'' device.
+
+             This option is only available for SSH protocol 2 and will yield a
+             fatal error if enabled if protocol 1 is also enabled.  Note that
+             each authentication method listed should also be explicitly
+             enabled in the configuration.  The default is not to require
+             multiple authentication; successful completion of a single
+             authentication method is sufficient.
+
+     AuthorizedKeysCommand
+             Specifies a program to be used to look up the user's public keys.
+             The program must be owned by root and not writable by group or
+             others.  It will be invoked with a single argument of the
+             username being authenticated, and should produce on standard
+             output zero or more lines of authorized_keys output (see
+             AUTHORIZED_KEYS in sshd(8)).  If a key supplied by
+             AuthorizedKeysCommand does not successfully authenticate and
+             authorize the user then public key authentication continues using
+             the usual AuthorizedKeysFile files.  By default, no
+             AuthorizedKeysCommand is run.
+
+     AuthorizedKeysCommandUser
+             Specifies the user under whose account the AuthorizedKeysCommand
+             is run.  It is recommended to use a dedicated user that has no
+             other role on the host than running authorized keys commands.
 
      AuthorizedKeysFile
              Specifies the file that contains the public keys that can be used
@@ -150,11 +200,13 @@ DESCRIPTION
              Specifies the ciphers allowed for protocol version 2.  Multiple
              ciphers must be comma-separated.  The supported ciphers are
              ``3des-cbc'', ``aes128-cbc'', ``aes192-cbc'', ``aes256-cbc'',
-             ``aes128-ctr'', ``aes192-ctr'', ``aes256-ctr'', ``arcfour128'',
-             ``arcfour256'', ``arcfour'', ``blowfish-cbc'', and
-             ``cast128-cbc''.  The default is:
+             ``aes128-ctr'', ``aes192-ctr'', ``aes256-ctr'',
+             ``aes128-gcm@openssh.com'', ``aes256-gcm@openssh.com'',
+             ``arcfour128'', ``arcfour256'', ``arcfour'', ``blowfish-cbc'',
+             and ``cast128-cbc''.  The default is:
 
                 aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,
+                aes128-gcm@openssh.com,aes256-gcm@openssh.com,
                 aes128-cbc,3des-cbc,blowfish-cbc,cast128-cbc,aes192-cbc,
                 aes256-cbc,arcfour
 
@@ -278,7 +330,16 @@ DESCRIPTION
              sshd(8) will refuse to use a file if it is group/world-
              accessible.  It is possible to have multiple host key files.
              ``rsa1'' keys are used for version 1 and ``dsa'', ``ecdsa'' or
-             ``rsa'' are used for version 2 of the SSH protocol.
+             ``rsa'' are used for version 2 of the SSH protocol.  It is also
+             possible to specify public host key files instead.  In this case
+             operations on the private key will be delegated to an
+             ssh-agent(1).
+
+     HostKeyAgent
+             Identifies the UNIX-domain socket used to communicate with an
+             agent that has access to the private host keys.  If
+             ``SSH_AUTH_SOCK'' is specified, the location of the socket will
+             be read from the SSH_AUTH_SOCK environment variable.
 
      IgnoreRhosts
              Specifies that .rhosts and .shosts files will not be used in
@@ -373,9 +434,16 @@ DESCRIPTION
      MACs    Specifies the available MAC (message authentication code)
              algorithms.  The MAC algorithm is used in protocol version 2 for
              data integrity protection.  Multiple algorithms must be comma-
-             separated.  The default is:
+             separated.  The algorithms that contain ``-etm'' calculate the
+             MAC after encryption (encrypt-then-mac).  These are considered
+             safer and their use recommended.  The default is:
 
-                   hmac-md5,hmac-sha1,umac-64@openssh.com,
+                   hmac-md5-etm@openssh.com,hmac-sha1-etm@openssh.com,
+                   umac-64-etm@openssh.com,umac-128-etm@openssh.com,
+                   hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,
+                   hmac-ripemd160-etm@openssh.com,hmac-sha1-96-etm@openssh.com,
+                   hmac-md5-96-etm@openssh.com,
+                   hmac-md5,hmac-sha1,umac-64@openssh.com,umac-128@openssh.com,
                    hmac-sha2-256,hmac-sha2-512,hmac-ripemd160,
                    hmac-sha1-96,hmac-md5-96
 
@@ -402,15 +470,17 @@ DESCRIPTION
              Only a subset of keywords may be used on the lines following a
              Match keyword.  Available keywords are AcceptEnv,
              AllowAgentForwarding, AllowGroups, AllowTcpForwarding,
-             AllowUsers, AuthorizedKeysFile, AuthorizedPrincipalsFile, Banner,
-             ChrootDirectory, DenyGroups, DenyUsers, ForceCommand,
-             GatewayPorts, GSSAPIAuthentication, HostbasedAuthentication,
-             HostbasedUsesNameFromPacketOnly, KbdInteractiveAuthentication,
-             KerberosAuthentication, MaxAuthTries, MaxSessions,
-             PasswordAuthentication, PermitEmptyPasswords, PermitOpen,
-             PermitRootLogin, PermitTunnel, PubkeyAuthentication,
-             RhostsRSAAuthentication, RSAAuthentication, X11DisplayOffset,
-             X11Forwarding and X11UseLocalHost.
+             AllowUsers, AuthenticationMethods, AuthorizedKeysCommand,
+             AuthorizedKeysCommandUser, AuthorizedKeysFile,
+             AuthorizedPrincipalsFile, Banner, ChrootDirectory, DenyGroups,
+             DenyUsers, ForceCommand, GatewayPorts, GSSAPIAuthentication,
+             HostbasedAuthentication, HostbasedUsesNameFromPacketOnly,
+             KbdInteractiveAuthentication, KerberosAuthentication,
+             MaxAuthTries, MaxSessions, PasswordAuthentication,
+             PermitEmptyPasswords, PermitOpen, PermitRootLogin, PermitTunnel,
+             PubkeyAuthentication, RekeyLimit, RhostsRSAAuthentication,
+             RSAAuthentication, X11DisplayOffset, X11Forwarding and
+             X11UseLocalHost.
 
      MaxAuthTries
              Specifies the maximum number of authentication attempts permitted
@@ -425,7 +495,7 @@ DESCRIPTION
              Specifies the maximum number of concurrent unauthenticated
              connections to the SSH daemon.  Additional connections will be
              dropped until authentication succeeds or the LoginGraceTime
-             expires for a connection.  The default is 10.
+             expires for a connection.  The default is 10:30:100.
 
              Alternatively, random early drop can be enabled by specifying the
              three colon separated values ``start:rate:full'' (e.g.
@@ -519,11 +589,29 @@ DESCRIPTION
              default is ``yes''.  Note that this option applies to protocol
              version 2 only.
 
+     RekeyLimit
+             Specifies the maximum amount of data that may be transmitted
+             before the session key is renegotiated, optionally followed a
+             maximum amount of time that may pass before the session key is
+             renegotiated.  The first argument is specified in bytes and may
+             have a suffix of `K', `M', or `G' to indicate Kilobytes,
+             Megabytes, or Gigabytes, respectively.  The default is between
+             `1G' and `4G', depending on the cipher.  The optional second
+             value is specified in seconds and may use any of the units
+             documented in the TIME FORMATS section.  The default value for
+             RekeyLimit is ``default none'', which means that rekeying is
+             performed after the cipher's default amount of data has been sent
+             or received and no time based rekeying is done.  This option
+             applies to protocol version 2 only.
+
      RevokedKeys
-             Specifies a list of revoked public keys.  Keys listed in this
-             file will be refused for public key authentication.  Note that if
-             this file is not readable, then public key authentication will be
-             refused for all users.
+             Specifies revoked public keys.  Keys listed in this file will be
+             refused for public key authentication.  Note that if this file is
+             not readable, then public key authentication will be refused for
+             all users.  Keys may be specified as a text file, listing one
+             public key per line, or as an OpenSSH Key Revocation List (KRL)
+             as generated by ssh-keygen(1).  For more information on KRLs, see
+             the KEY REVOCATION LISTS section in ssh-keygen(1).
 
      RhostsRSAAuthentication
              Specifies whether rhosts or /etc/hosts.equiv authentication
@@ -722,4 +810,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 5.2                      June 29, 2012                     OpenBSD 5.2
+OpenBSD 5.4                      July 19, 2013                     OpenBSD 5.4

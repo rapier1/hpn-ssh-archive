@@ -1,4 +1,4 @@
-/* $OpenBSD: servconf.h,v 1.103 2012/07/10 02:19:15 djm Exp $ */
+/* $OpenBSD: servconf.h,v 1.109 2013/07/19 07:37:48 markus Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -28,6 +28,7 @@
 #define MAX_ACCEPT_ENV		256	/* Max # of env vars. */
 #define MAX_MATCH_GROUPS	256	/* Max # of groups for Match. */
 #define MAX_AUTHKEYS_FILES	256	/* Max # of authorized_keys files. */
+#define MAX_AUTH_METHODS	256	/* Max # of AuthenticationMethods. */
 
 /* permit_root_login */
 #define	PERMIT_NOT_SET		-1
@@ -40,6 +41,12 @@
 #define PRIVSEP_OFF		0
 #define PRIVSEP_ON		1
 #define PRIVSEP_NOSANDBOX	2
+
+/* AllowTCPForwarding */
+#define FORWARD_DENY		0
+#define FORWARD_REMOTE		(1)
+#define FORWARD_LOCAL		(1<<1)
+#define FORWARD_ALLOW		(FORWARD_REMOTE|FORWARD_LOCAL)
 
 #define DEFAULT_AUTH_FAIL_MAX	6	/* Default for MaxAuthTries */
 #define DEFAULT_SESSIONS_MAX	10	/* Default for MaxSessions */
@@ -58,6 +65,7 @@ typedef struct {
 	int     num_host_key_files;     /* Number of files for host keys. */
 	char   *host_cert_files[MAX_HOSTCERTS];	/* Files containing host certs. */
 	int     num_host_cert_files;     /* Number of files for host certs. */
+	char   *host_key_agent;		 /* ssh-agent socket for host keys. */
 	char   *pid_file;	/* Where to put our pid */
 	int     server_key_bits;/* Size of the server key. */
 	int     login_grace_time;	/* Disconnect if no auth in this time
@@ -115,7 +123,7 @@ typedef struct {
 	int     permit_user_env;	/* If true, read ~/.ssh/environment */
 	int     use_login;	/* If true, login(1) is used */
 	int     compression;	/* If true, compression is allowed */
-	int	allow_tcp_forwarding;
+	int	allow_tcp_forwarding; /* One of FORWARD_* */
 	int	allow_agent_forwarding;
 	u_int num_allow_users;
 	char   *allow_users[MAX_ALLOW_USERS];
@@ -157,10 +165,10 @@ typedef struct {
 	char   *adm_forced_command;
 
 	int	use_pam;		/* Enable auth via PAM */
-        int     none_enabled;           /* enable NONE cipher switch */
         int     tcp_rcv_buf_poll;       /* poll tcp rcv window in autotuning kernels*/
 	int	hpn_disabled;		/* disable hpn functionality. false by default */
 	int	hpn_buffer_size;	/* set the hpn buffer size - default 3MB */
+	int	none_enabled;		/* enable NONE cipher switch */	
 
 	int	permit_tun;
 
@@ -170,8 +178,16 @@ typedef struct {
 	char   *revoked_keys_file;
 	char   *trusted_user_ca_keys;
 	char   *authorized_principals_file;
+	char   *authorized_keys_command;
+	char   *authorized_keys_command_user;
+
+	int64_t rekey_limit;
+	int	rekey_interval;
 
 	char   *version_addendum;	/* Appended to SSH banner */
+
+	u_int	num_auth_methods;
+	char   *auth_methods[MAX_AUTH_METHODS];
 }       ServerOptions;
 
 /* Information about the incoming connection as used by Match */
@@ -195,12 +211,15 @@ struct connection_info {
 		M_CP_STROPT(trusted_user_ca_keys); \
 		M_CP_STROPT(revoked_keys_file); \
 		M_CP_STROPT(authorized_principals_file); \
+		M_CP_STROPT(authorized_keys_command); \
+		M_CP_STROPT(authorized_keys_command_user); \
 		M_CP_STRARRAYOPT(authorized_keys_files, num_authkeys_files); \
 		M_CP_STRARRAYOPT(allow_users, num_allow_users); \
 		M_CP_STRARRAYOPT(deny_users, num_deny_users); \
 		M_CP_STRARRAYOPT(allow_groups, num_allow_groups); \
 		M_CP_STRARRAYOPT(deny_groups, num_deny_groups); \
 		M_CP_STRARRAYOPT(accept_env, num_accept_env); \
+		M_CP_STRARRAYOPT(auth_methods, num_auth_methods); \
 	} while (0)
 
 struct connection_info *get_connection_info(int, int);

@@ -1,4 +1,4 @@
-/* $OpenBSD: progressmeter.c,v 1.37 2006/08/03 03:34:42 deraadt Exp $ */
+/* $OpenBSD: progressmeter.c,v 1.39 2013/06/02 13:33:05 dtucker Exp $ */
 /*
  * Copyright (c) 2003 Nils Nordman.  All rights reserved.
  *
@@ -69,6 +69,8 @@ static time_t last_update;	/* last progress update */
 static char *file;		/* name of the file being transferred */
 static off_t end_pos;		/* ending position of transfer */
 static off_t cur_pos;		/* transfer position as of last refresh */
+static off_t last_pos;
+static off_t max_delta_pos = 0;
 static volatile off_t *counter;	/* progress counter */
 static long stalled;		/* how long we have been stalled */
 static int bytes_per_second;	/* current speed in bytes per second */
@@ -196,11 +198,16 @@ refresh_progress_meter(void)
 	web10g_get_OctetsRetrans(&retrans);
 	web10g_get_SampleRTT(&samplertt);
 	web10g_get_LimRwin(&limrwin);
+	off_t delta_pos;
 
 	transferred = *counter - cur_pos;
 	cur_pos = *counter;
-	now = time(NULL);
+	now = monotime();
 	bytes_left = end_pos - cur_pos;
+
+	delta_pos = cur_pos - last_pos;
+	if (delta_pos > max_delta_pos) 
+		max_delta_pos = delta_pos;
 
 	if (bytes_left > 0)
 		elapsed = now - last_update;
@@ -271,6 +278,15 @@ refresh_progress_meter(void)
 	    (off_t)bytes_per_second);
 	strlcat(buf, "/s ", win_size);
 
+	/* instantaneous rate */
+	if (bytes_left > 0)
+		format_rate(buf + strlen(buf), win_size - strlen(buf),
+			    delta_pos);
+	else
+		format_rate(buf + strlen(buf), win_size - strlen(buf),
+			    max_delta_pos);
+	strlcat(buf, "/s ", win_size);
+
 	/* ETA */
 	if (!transferred)
 		stalled += elapsed;
@@ -307,6 +323,7 @@ refresh_progress_meter(void)
 
 	atomicio(vwrite, STDOUT_FILENO, buf, win_size - 1);
 	last_update = now;
+	last_pos = cur_pos;
 }
 
 /*ARGSUSED*/
@@ -332,7 +349,7 @@ update_progress_meter(int ignore)
 void
 start_progress_meter(char *f, off_t filesize, off_t *ctr)
 {
-	start = last_update = time(NULL);
+	start = last_update = monotime();
 	file = f;
 	end_pos = filesize;
 	cur_pos = 0;

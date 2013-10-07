@@ -1,4 +1,4 @@
-/* $OpenBSD: packet.h,v 1.57 2012/01/25 19:40:09 markus Exp $ */
+/* $OpenBSD: packet.h,v 1.59 2013/07/12 00:19:59 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -23,9 +23,7 @@
 #include <openssl/ec.h>
 #endif
 
-void
-packet_request_rekeying(void);
-
+void	 packet_request_rekeying(void);
 void     packet_set_connection(int, int);
 void     packet_set_timeout(int, int);
 void     packet_set_nonblocking(void);
@@ -41,7 +39,8 @@ void     packet_set_interactive(int, int, int);
 int      packet_is_interactive(void);
 void     packet_set_server(void);
 void     packet_set_authenticated(void);
-int	 packet_authentication_state(void);
+void*	 packet_get_receive_context(void);
+void*	 packet_get_send_context(void);
 
 void     packet_start(u_char);
 void     packet_put_char(int ch);
@@ -75,7 +74,7 @@ void	*packet_get_raw(u_int *length_ptr);
 void	*packet_get_string(u_int *length_ptr);
 char	*packet_get_cstring(u_int *length_ptr);
 void	*packet_get_string_ptr(u_int *length_ptr);
-void     packet_disconnect(const char *fmt,...) __attribute__((format(printf, 1, 2)));
+void     packet_disconnect(const char *fmt,...) __attribute__((noreturn)) __attribute__((format(printf, 1, 2)));
 void     packet_send_debug(const char *fmt,...) __attribute__((format(printf, 1, 2)));
 
 void	 set_newkeys(int mode);
@@ -107,6 +106,10 @@ int	 packet_inc_alive_timeouts(void);
 int	 packet_set_maxsize(u_int);
 u_int	 packet_get_maxsize(void);
 
+/* for forced packet rekeying post auth */
+void	packet_request_rekeying(void);
+int	packet_authentication_state(void);
+
 /* don't allow remaining bytes after the end of the message */
 #define packet_check_eom() \
 do { \
@@ -119,7 +122,8 @@ do { \
 } while (0)
 
 int	 packet_need_rekeying(void);
-void	 packet_set_rekey_limit(u_int32_t);
+void	 packet_set_rekey_limits(u_int32_t, time_t);
+time_t	 packet_get_rekey_timeout(void);
 
 void	 packet_backup_state(void);
 void	 packet_restore_state(void);

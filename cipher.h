@@ -1,4 +1,4 @@
-/* $OpenBSD: cipher.h,v 1.37 2009/01/26 09:58:15 markus Exp $ */
+/* $OpenBSD: cipher.h,v 1.40 2013/04/19 01:06:50 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -64,24 +64,34 @@ typedef struct CipherContext CipherContext;
 struct Cipher;
 struct CipherContext {
 	int	plaintext;
+	int	encrypt;
 	EVP_CIPHER_CTX evp;
-	Cipher *cipher;
+	const Cipher *cipher;
 };
 
+void ssh_aes_ctr_thread_destroy(EVP_CIPHER_CTX *ctx); // defined in cipher-ctr-mt.c
+void ssh_aes_ctr_thread_reconstruction(EVP_CIPHER_CTX *ctx);
+
 u_int	 cipher_mask_ssh1(int);
-Cipher	*cipher_by_name(const char *);
-Cipher	*cipher_by_number(int);
+const Cipher	*cipher_by_name(const char *);
+const Cipher	*cipher_by_number(int);
 int	 cipher_number(const char *);
 char	*cipher_name(int);
 int	 ciphers_valid(const char *);
-void	 cipher_init(CipherContext *, Cipher *, const u_char *, u_int,
+char	*cipher_alg_list(void);
+void	 cipher_init(CipherContext *, const Cipher *, const u_char *, u_int,
     const u_char *, u_int, int);
-void	 cipher_crypt(CipherContext *, u_char *, const u_char *, u_int);
+void	 cipher_crypt(CipherContext *, u_char *, const u_char *,
+    u_int, u_int, u_int);
 void	 cipher_cleanup(CipherContext *);
-void	 cipher_set_key_string(CipherContext *, Cipher *, const char *, int);
+void	 cipher_set_key_string(CipherContext *, const Cipher *, const char *, int);
 u_int	 cipher_blocksize(const Cipher *);
 u_int	 cipher_keylen(const Cipher *);
+u_int	 cipher_authlen(const Cipher *);
+u_int	 cipher_ivlen(const Cipher *);
 u_int	 cipher_is_cbc(const Cipher *);
+void	 cipher_reset_multithreaded(void);
+char 	*cipher_return_name(const Cipher *);
 
 u_int	 cipher_get_number(const Cipher *);
 void	 cipher_get_keyiv(CipherContext *, u_char *, u_int);

@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.393 2012/07/10 02:19:15 djm Exp $ */
+/* $OpenBSD: sshd.c,v 1.404 2013/07/19 07:37:48 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -106,6 +106,7 @@
 #include "canohost.h"
 #include "hostfile.h"
 #include "auth.h"
+#include "authfd.h"
 #include "misc.h"
 #include "msg.h"
 #include "dispatch.h"
@@ -198,6 +199,10 @@ char *server_version_string = NULL;
 /* for rekeying XXX fixme */
 Kex *xxx_kex;
 
+/* Daemon's agent connection */
+AuthenticationConnection *auth_conn = NULL;
+int have_agent = 0;
+
 /*
  * Any really sensitive data in the application is contained in this
  * structure. The idea is that this structure could be locked into memory so
@@ -210,6 +215,7 @@ struct {
 	Key	*server_key;		/* ephemeral server key */
 	Key	*ssh1_host_key;		/* ssh1 host key */
 	Key	**host_keys;		/* all private host keys */
+	Key	**host_pubkeys;		/* all public host keys */
 	Key	**host_certificates;	/* all public host certificates */
 	int	have_ssh1_key;
 	int	have_ssh2_key;
@@ -362,6 +368,15 @@ grace_alarm_handler(int sig)
 {
 	if (use_privsep && pmonitor != NULL && pmonitor->m_pid > 0)
 		kill(pmonitor->m_pid, SIGALRM);
+
+	/*
+	 * Try to kill any processes that we have spawned, E.g. authorized
+	 * keys command helpers.
+	 */
+	if (getpgid(0) == getpid()) {
+		signal(SIGTERM, SIG_IGN);
+		killpg(0, SIGTERM);
+	}
 
 	/* Log error and exit. */
 	sigdie("Timeout before authentication for %s", get_remote_ipaddr());
@@ -651,6 +666,8 @@ privsep_preauth(Authctxt *authctxt)
 		debug2("Network child is on pid %ld", (long)pid);
 
 		pmonitor->m_pid = pid;
+		if (have_agent)
+			auth_conn = ssh_get_authentication_connection();
 		if (box != NULL)
 			ssh_sandbox_parent_preauth(box, pid);
 		monitor_child_preauth(authctxt, pmonitor);
@@ -765,6 +782,8 @@ list_hostkey_types(void)
 	for (i = 0; i < options.num_host_key_files; i++) {
 		key = sensitive_data.host_keys[i];
 		if (key == NULL)
+			key = sensitive_data.host_pubkeys[i];
+		if (key == NULL)
 			continue;
 		switch (key->type) {
 		case KEY_RSA:
@@ -817,6 +836,8 @@ get_hostkey_by_type(int type, int need_private)
 			break;
 		default:
 			key = sensitive_data.host_keys[i];
+			if (key == NULL && !need_private)
+				key = sensitive_data.host_pubkeys[i];
 			break;
 		}
 		if (key != NULL && key->type == type)
@@ -846,6 +867,14 @@ get_hostkey_by_index(int ind)
 	return (sensitive_data.host_keys[ind]);
 }
 
+Key *
+get_hostkey_public_by_index(int ind)
+{
+	if (ind < 0 || ind >= options.num_host_key_files)
+		return (NULL);
+	return (sensitive_data.host_pubkeys[ind]);
+}
+
 int
 get_hostkey_index(Key *key)
 {
@@ -857,6 +886,8 @@ get_hostkey_index(Key *key)
 				return (i);
 		} else {
 			if (key == sensitive_data.host_keys[i])
+				return (i);
+			if (key == sensitive_data.host_pubkeys[i])
 				return (i);
 		}
 	}
@@ -898,8 +929,9 @@ usage(void)
 	    SSH_RELEASE, SSLeay_version(SSLEAY_VERSION));
 	fprintf(stderr,
 "usage: sshd [-46DdeiqTt] [-b bits] [-C connection_spec] [-c host_cert_file]\n"
-"            [-f config_file] [-g login_grace_time] [-h host_key_file]\n"
-"            [-k key_gen_time] [-o option] [-p port] [-u len]\n"
+"            [-E log_file] [-f config_file] [-g login_grace_time]\n"
+"            [-h host_key_file] [-k key_gen_time] [-o option] [-p port]\n"
+"            [-u len]\n"
 	);
 	exit(1);
 }
@@ -970,7 +1002,7 @@ recv_rexec_state(int fd, Buffer *conf)
 	cp = buffer_get_string(&m, &len);
 	if (conf != NULL)
 		buffer_append(conf, cp, len + 1);
-	xfree(cp);
+	free(cp);
 
 	if (buffer_get_int(&m)) {
 		if (sensitive_data.server_key != NULL)
@@ -1021,7 +1053,9 @@ server_accept_inetd(int *sock_in, int *sock_out)
 	if ((fd = open(_PATH_DEVNULL, O_RDWR, 0)) != -1) {
 		dup2(fd, STDIN_FILENO);
 		dup2(fd, STDOUT_FILENO);
-		if (fd > STDOUT_FILENO)
+		if (!log_stderr)
+			dup2(fd, STDERR_FILENO);
+		if (fd > (log_stderr ? STDERR_FILENO : STDOUT_FILENO))
 			close(fd);
 	}
 	debug("inetd sockets after dupping: %d, %d", *sock_in, *sock_out);
@@ -1080,7 +1114,6 @@ server_listen(void)
 
 		web10g_get_LimRwin(&socksize);
 		socksize*=2;
-		
 		debug("Server TCP RWIN socket size: %d", socksize);
 		debug("HPN Buffer Size: %d", options.hpn_buffer_size);
 
@@ -1140,7 +1173,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 		if (received_sighup)
 			sighup_restart();
 		if (fdset != NULL)
-			xfree(fdset);
+			free(fdset);
 		fdset = (fd_set *)xcalloc(howmany(maxfd + 1, NFDBITS),
 		    sizeof(fd_mask));
 
@@ -1189,8 +1222,8 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			*newsock = accept(listen_socks[i],
 			    (struct sockaddr *)&from, &fromlen);
 			if (*newsock < 0) {
-				if (errno != EINTR && errno != EAGAIN &&
-				    errno != EWOULDBLOCK)
+				if (errno != EINTR && errno != EWOULDBLOCK &&
+				    errno != ECONNABORTED && errno != EAGAIN)
 					error("accept: %.100s",
 					    strerror(errno));
 				if (errno == EMFILE || errno == ENFILE)
@@ -1341,11 +1374,14 @@ main(int ac, char **av)
 	int sock_in = -1, sock_out = -1, newsock = -1;
 	const char *remote_ip;
 	int remote_port;
-	char *line;
+	char *line, *logfile = NULL;
 	int config_s[2] = { -1 , -1 };
+	u_int n;
 	u_int64_t ibytes, obytes;
 	mode_t new_umask;
 	Key *key;
+	Key *pubkey;
+	int keytype;
 	Authctxt *authctxt;
 	struct connection_info *connection_info = get_connection_info(0, 0);
 
@@ -1378,7 +1414,7 @@ main(int ac, char **av)
 	initialize_server_options(&options);
 
 	/* Parse command-line arguments. */
-	while ((opt = getopt(ac, av, "f:p:b:k:h:g:u:o:C:dDeiqrtQRT46")) != -1) {
+	while ((opt = getopt(ac, av, "f:p:b:k:h:g:u:o:C:dDeE:iqrtQRT46")) != -1) {
 		switch (opt) {
 		case '4':
 			options.address_family = AF_INET;
@@ -1407,6 +1443,9 @@ main(int ac, char **av)
 		case 'D':
 			no_daemon_flag = 1;
 			break;
+		case 'E':
+			logfile = xstrdup(optarg);
+			/* FALLTHROUGH */
 		case 'e':
 			log_stderr = 1;
 			break;
@@ -1485,7 +1524,7 @@ main(int ac, char **av)
 			if (process_server_config_line(&options, line,
 			    "command-line", 0, NULL, NULL) != 0)
 				exit(1);
-			xfree(line);
+			free(line);
 			break;
 		case '?':
 		default:
@@ -1504,6 +1543,11 @@ main(int ac, char **av)
 
 	OpenSSL_add_all_algorithms();
 
+	/* If requested, redirect the logs to the specified logfile. */
+	if (logfile != NULL) {
+		log_redirect_stderr_to(logfile);
+		free(logfile);
+	}
 	/*
 	 * Force logging to stderr until we have loaded the private host
 	 * key (unless started from inetd)
@@ -1565,6 +1609,33 @@ main(int ac, char **av)
 	if (options.challenge_response_authentication)
 		options.kbd_interactive_authentication = 1;
 
+	/* Check that options are sensible */
+	if (options.authorized_keys_command_user == NULL &&
+	    (options.authorized_keys_command != NULL &&
+	    strcasecmp(options.authorized_keys_command, "none") != 0))
+		fatal("AuthorizedKeysCommand set without "
+		    "AuthorizedKeysCommandUser");
+
+	/*
+	 * Check whether there is any path through configured auth methods.
+	 * Unfortunately it is not possible to verify this generally before
+	 * daemonisation in the presence of Match block, but this catches
+	 * and warns for trivial misconfigurations that could break login.
+	 */
+	if (options.num_auth_methods != 0) {
+		if ((options.protocol & SSH_PROTO_1))
+			fatal("AuthenticationMethods is not supported with "
+			    "SSH protocol 1");
+		for (n = 0; n < options.num_auth_methods; n++) {
+			if (auth2_methods_valid(options.auth_methods[n],
+			    1) == 0)
+				break;
+		}
+		if (n >= options.num_auth_methods)
+			fatal("AuthenticationMethods cannot be satisfied by "
+			    "enabled authentication methods");
+	}
+
 	/* set default channel AF */
 	channel_set_af(options.address_family);
 
@@ -1574,7 +1645,8 @@ main(int ac, char **av)
 		exit(1);
 	}
 
-	debug("sshd version %.100s", SSH_RELEASE);
+	debug("sshd version %s, %s", SSH_VERSION,
+	    SSLeay_version(SSLEAY_VERSION));
 
 	/* Store privilege separation user for later use if required. */
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {
@@ -1584,27 +1656,50 @@ main(int ac, char **av)
 	} else {
 		memset(privsep_pw->pw_passwd, 0, strlen(privsep_pw->pw_passwd));
 		privsep_pw = pwcopy(privsep_pw);
-		xfree(privsep_pw->pw_passwd);
+		free(privsep_pw->pw_passwd);
 		privsep_pw->pw_passwd = xstrdup("*");
 	}
 	endpwent();
 
-	/* load private host keys */
+	/* load host keys */
 	sensitive_data.host_keys = xcalloc(options.num_host_key_files,
 	    sizeof(Key *));
-	for (i = 0; i < options.num_host_key_files; i++)
+	sensitive_data.host_pubkeys = xcalloc(options.num_host_key_files,
+	    sizeof(Key *));
+	for (i = 0; i < options.num_host_key_files; i++) {
 		sensitive_data.host_keys[i] = NULL;
+		sensitive_data.host_pubkeys[i] = NULL;
+	}
+
+	if (options.host_key_agent) {
+		if (strcmp(options.host_key_agent, SSH_AUTHSOCKET_ENV_NAME))
+			setenv(SSH_AUTHSOCKET_ENV_NAME,
+			    options.host_key_agent, 1);
+		have_agent = ssh_agent_present();
+	}
 
 	for (i = 0; i < options.num_host_key_files; i++) {
 		key = key_load_private(options.host_key_files[i], "", NULL);
+		pubkey = key_load_public(options.host_key_files[i], NULL);
 		sensitive_data.host_keys[i] = key;
-		if (key == NULL) {
+		sensitive_data.host_pubkeys[i] = pubkey;
+
+		if (key == NULL && pubkey != NULL && pubkey->type != KEY_RSA1 &&
+		    have_agent) {
+			debug("will rely on agent for hostkey %s",
+			    options.host_key_files[i]);
+			keytype = pubkey->type;
+		} else if (key != NULL) {
+			keytype = key->type;
+		} else {
 			error("Could not load host key: %s",
 			    options.host_key_files[i]);
 			sensitive_data.host_keys[i] = NULL;
+			sensitive_data.host_pubkeys[i] = NULL;
 			continue;
 		}
-		switch (key->type) {
+
+		switch (keytype) {
 		case KEY_RSA1:
 			sensitive_data.ssh1_host_key = key;
 			sensitive_data.have_ssh1_key = 1;
@@ -1615,8 +1710,8 @@ main(int ac, char **av)
 			sensitive_data.have_ssh2_key = 1;
 			break;
 		}
-		debug("private host key: #%d type %d %s", i, key->type,
-		    key_type(key));
+		debug("private host key: #%d type %d %s", i, keytype,
+		    key_type(key ? key : pubkey));
 	}
 	if ((options.protocol & SSH_PROTO_1) && !sensitive_data.have_ssh1_key) {
 		logit("Disabling protocol version 1. Could not load host key");
@@ -1783,7 +1878,8 @@ main(int ac, char **av)
 
 	/* Chdir to the root directory so that the current disk can be
 	   unmounted if desired. */
-	chdir("/");
+	if (chdir("/") == -1)
+		error("chdir(\"/\"): %s", strerror(errno));
 
 	/* ignore SIGPIPE */
 	signal(SIGPIPE, SIG_IGN);
@@ -1988,9 +2084,11 @@ main(int ac, char **av)
 	buffer_init(&loginmsg);
 	auth_debug_reset();
 
-	if (use_privsep)
+	if (use_privsep) {
 		if (privsep_preauth(authctxt) == 1)
 			goto authenticated;
+	} else if (compat20 && have_agent)
+		auth_conn = ssh_get_authentication_connection();
 
 	/* perform the key exchange */
 	/* authenticate user and start session */
@@ -2056,6 +2154,23 @@ main(int ac, char **av)
 	    options.client_alive_count_max);
 
 	/* Start session. */
+
+	/* if we are using aes-ctr there can be issues in either a fork or sandbox
+         * so the initial aes-ctr is defined to point ot the original single process
+	 * evp. After authentication we'll be past the fork and the sandboxed privsep
+	 * so we repoint the define to the multithreaded evp. To start the threads we
+	 * then force a rekey
+	 */
+        CipherContext *ccsend;
+        ccsend = (CipherContext*)packet_get_send_context();
+
+	/* only rekey if necessary. If we don't do this gcm mode cipher breaks */
+	if (strstr(cipher_return_name((Cipher*)ccsend->cipher), "ctr")) {
+		debug ("Single to Multithreaded CTR cipher swap - server request");
+		cipher_reset_multithreaded();
+		packet_request_rekeying();
+	}
+
 	do_authenticated(authctxt);
 
 	/* The connection has been terminated. */
@@ -2277,7 +2392,7 @@ do_ssh1_kex(void)
 		MD5_Update(&md, sensitive_data.ssh1_cookie, SSH_SESSION_KEY_LENGTH);
 		MD5_Final(session_key + 16, &md);
 		memset(buf, 0, bytes);
-		xfree(buf);
+		free(buf);
 		for (i = 0; i < 16; i++)
 			session_id[i] = session_key[i] ^ session_key[i + 16];
 	}
@@ -2304,6 +2419,23 @@ do_ssh1_kex(void)
 	packet_write_wait();
 }
 
+void
+sshd_hostkey_sign(Key *privkey, Key *pubkey, u_char **signature, u_int *slen,
+    u_char *data, u_int dlen)
+{
+	if (privkey) {
+		if (PRIVSEP(key_sign(privkey, signature, slen, data, dlen) < 0))
+			fatal("%s: key_sign failed", __func__);
+	} else if (use_privsep) {
+		if (mm_key_sign(pubkey, signature, slen, data, dlen) < 0)
+			fatal("%s: pubkey_sign failed", __func__);
+	} else {
+		if (ssh_agent_sign(auth_conn, pubkey, signature, slen, data,
+		    dlen))
+			fatal("%s: ssh_agent_sign failed", __func__);
+	}
+}
+
 /*
  * SSH2 key exchange: diffie-hellman-group1-sha1
  */
@@ -2317,10 +2449,10 @@ do_ssh2_kex(void)
 	if (options.ciphers != NULL) {
 		myproposal[PROPOSAL_ENC_ALGS_CTOS] =
 		myproposal[PROPOSAL_ENC_ALGS_STOC] = options.ciphers;
-	} else if (options.none_enabled == 1) {
-		debug ("WARNING: None cipher enabled");
-		myproposal[PROPOSAL_ENC_ALGS_CTOS] =
-		myproposal[PROPOSAL_ENC_ALGS_STOC] = KEX_ENCRYPT_INCLUDE_NONE;
+        } else if (options.none_enabled == 1) {
+                debug ("WARNING: None cipher enabled");
+                myproposal[PROPOSAL_ENC_ALGS_CTOS] =
+                myproposal[PROPOSAL_ENC_ALGS_STOC] = KEX_ENCRYPT_INCLUDE_NONE;
 	}
 	myproposal[PROPOSAL_ENC_ALGS_CTOS] =
 	    compat_cipher_proposal(myproposal[PROPOSAL_ENC_ALGS_CTOS]);
@@ -2341,6 +2473,10 @@ do_ssh2_kex(void)
 	if (options.kex_algorithms != NULL)
 		myproposal[PROPOSAL_KEX_ALGS] = options.kex_algorithms;
 
+	if (options.rekey_limit || options.rekey_interval)
+		packet_set_rekey_limits((u_int32_t)options.rekey_limit,
+		    (time_t)options.rekey_interval);
+
 	myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = list_hostkey_types();
 
 	/* start key exchange */
@@ -2356,6 +2492,7 @@ do_ssh2_kex(void)
 	kex->load_host_public_key=&get_hostkey_public_by_type;
 	kex->load_host_private_key=&get_hostkey_private_by_type;
 	kex->host_key_index=&get_hostkey_index;
+	kex->sign = sshd_hostkey_sign;
 
 	xxx_kex = kex;
 
