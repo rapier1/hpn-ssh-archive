@@ -138,9 +138,6 @@ int deny_severity;
 #define REEXEC_CONFIG_PASS_FD		(STDERR_FILENO + 3)
 #define REEXEC_MIN_FREE_FD		(STDERR_FILENO + 4)
 
-int myflag = 0;
-
-
 extern char *__progname;
 
 /* Server configuration options. */
@@ -2345,8 +2342,6 @@ do_ssh2_kex(void)
 {
 	Kex *kex;
 
-	myflag++;
-	debug ("MYFLAG IS %d", myflag);
 	if (options.ciphers != NULL) {
 		myproposal[PROPOSAL_ENC_ALGS_CTOS] =
 		myproposal[PROPOSAL_ENC_ALGS_STOC] = options.ciphers;
