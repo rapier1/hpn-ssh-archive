@@ -1,4 +1,4 @@
-/* $OpenBSD: cipher.c,v 1.87 2013/01/26 06:11:05 djm Exp $ */
+/* $OpenBSD: cipher.c,v 1.89 2013/05/17 00:13:13 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -72,7 +72,9 @@ struct Cipher {
 	u_int	discard_len;
 	u_int	cbc_mode;
 	const EVP_CIPHER	*(*evptype)(void);
-} ciphers[] = {
+};
+
+static struct Cipher ciphers[] = {
 	{ "none",	SSH_CIPHER_NONE, 8, 0, 0, 0, 0, 0, EVP_enc_null },
 	{ "des",	SSH_CIPHER_DES, 8, 8, 0, 0, 0, 1, EVP_des_cbc },
 	{ "3des",	SSH_CIPHER_3DES, 8, 16, 0, 0, 0, 1, evp_ssh1_3des },
@@ -118,12 +120,34 @@ cipher_return_name(const Cipher *c)
  * we set the initial pre-auth aes-ctr cipher to the default OpenSSH cipher
  * post auth we set them to the new evp as defined by cipher-ctr-mt
 */
+
 void
 cipher_reset_multithreaded()
 {
   (cipher_by_name("aes128-ctr"))->evptype = evp_aes_ctr_mt;
   (cipher_by_name("aes192-ctr"))->evptype = evp_aes_ctr_mt;
   (cipher_by_name("aes256-ctr"))->evptype = evp_aes_ctr_mt;
+}
+
+/* Returns a comma-separated list of supported ciphers. */
+char *
+cipher_alg_list(void)
+{
+	char *ret = NULL;
+	size_t nlen, rlen = 0;
+	const Cipher *c;
+
+	for (c = ciphers; c->name != NULL; c++) {
+		if (c->number != SSH_CIPHER_SSH2)
+			continue;
+		if (ret != NULL)
+			ret[rlen++] = '\n';
+		nlen = strlen(c->name);
+		ret = xrealloc(ret, 1, rlen + nlen + 2);
+		memcpy(ret + rlen, c->name, nlen + 1);
+		rlen += nlen;
+	}
+	return ret;
 }
 
 u_int
@@ -174,10 +198,10 @@ cipher_mask_ssh1(int client)
 	return mask;
 }
 
-Cipher *
+const Cipher *
 cipher_by_name(const char *name)
 {
-	Cipher *c;
+	const Cipher *c;
 	for (c = ciphers; c->name != NULL; c++)
 		if (strcmp(c->name, name) == 0)
 			return c;
@@ -198,7 +222,7 @@ cipher_by_number(int id)
 int
 ciphers_valid(const char *names)
 {
-	Cipher *c;
+	const Cipher *c;
 	char *cipher_list, *cp;
 	char *p;
 
@@ -211,14 +235,14 @@ ciphers_valid(const char *names)
 		if (c == NULL || (c->number != SSH_CIPHER_SSH2 &&
 				  c->number != SSH_CIPHER_NONE)) {
 			debug("bad cipher %s [%s]", p, names);
-			xfree(cipher_list);
+			free(cipher_list);
 			return 0;
 		} else {
 			debug3("cipher ok: %s [%s]", p, names);
 		}
 	}
 	debug3("ciphers ok: [%s]", names);
-	xfree(cipher_list);
+	free(cipher_list);
 	return 1;
 }
 
@@ -230,7 +254,7 @@ ciphers_valid(const char *names)
 int
 cipher_number(const char *name)
 {
-	Cipher *c;
+	const Cipher *c;
 	if (name == NULL)
 		return -1;
 	for (c = ciphers; c->name != NULL; c++)
@@ -242,12 +266,12 @@ cipher_number(const char *name)
 char *
 cipher_name(int id)
 {
-	Cipher *c = cipher_by_number(id);
+	const Cipher *c = cipher_by_number(id);
 	return (c==NULL) ? "<unknown>" : c->name;
 }
 
 void
-cipher_init(CipherContext *cc, Cipher *cipher,
+cipher_init(CipherContext *cc, const Cipher *cipher,
     const u_char *key, u_int keylen, const u_char *iv, u_int ivlen,
     int do_encrypt)
 {
@@ -320,8 +344,8 @@ cipher_init(CipherContext *cc, Cipher *cipher,
 		    cipher->discard_len) == 0)
 			fatal("evp_crypt: EVP_Cipher failed during discard");
 		memset(discard, 0, cipher->discard_len);
-		xfree(junk);
-		xfree(discard);
+		free(junk);
+		free(discard);
 	}
 }
 
@@ -393,7 +417,7 @@ cipher_cleanup(CipherContext *cc)
  */
 
 void
-cipher_set_key_string(CipherContext *cc, Cipher *cipher,
+cipher_set_key_string(CipherContext *cc, const Cipher *cipher,
     const char *passphrase, int do_encrypt)
 {
 	MD5_CTX md;
@@ -418,7 +442,7 @@ cipher_set_key_string(CipherContext *cc, Cipher *cipher,
 int
 cipher_get_keyiv_len(const CipherContext *cc)
 {
-	Cipher *c = cc->cipher;
+	const Cipher *c = cc->cipher;
 	int ivlen;
 
 	if (c->number == SSH_CIPHER_3DES)
@@ -431,7 +455,7 @@ cipher_get_keyiv_len(const CipherContext *cc)
 void
 cipher_get_keyiv(CipherContext *cc, u_char *iv, u_int len)
 {
-	Cipher *c = cc->cipher;
+	const Cipher *c = cc->cipher;
 	int evplen;
 
 	switch (c->number) {
@@ -468,7 +492,7 @@ cipher_get_keyiv(CipherContext *cc, u_char *iv, u_int len)
 void
 cipher_set_keyiv(CipherContext *cc, u_char *iv)
 {
-	Cipher *c = cc->cipher;
+	const Cipher *c = cc->cipher;
 	int evplen = 0;
 
 	switch (c->number) {
@@ -502,7 +526,7 @@ cipher_set_keyiv(CipherContext *cc, u_char *iv)
 int
 cipher_get_keycontext(const CipherContext *cc, u_char *dat)
 {
-	Cipher *c = cc->cipher;
+	const Cipher *c = cc->cipher;
 	int plen = 0;
 
 	if (c->evptype == EVP_rc4) {
@@ -517,7 +541,7 @@ cipher_get_keycontext(const CipherContext *cc, u_char *dat)
 void
 cipher_set_keycontext(CipherContext *cc, u_char *dat)
 {
-	Cipher *c = cc->cipher;
+	const Cipher *c = cc->cipher;
 	int plen;
 
 	if (c->evptype == EVP_rc4) {
