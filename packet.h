@@ -103,6 +103,10 @@ int	 packet_inc_alive_timeouts(void);
 int	 packet_set_maxsize(u_int);
 u_int	 packet_get_maxsize(void);
 
+/* for forced packet rekeying post auth */
+void	packet_request_rekeying(void);
+int	packet_authentication_state(void);
+
 /* don't allow remaining bytes after the end of the message */
 #define packet_check_eom() \
 do { \

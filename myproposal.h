@@ -106,6 +106,8 @@
 #define	KEX_DEFAULT_COMP	"none,zlib@openssh.com,zlib"
 #define	KEX_DEFAULT_LANG	""
 
+#define KEX_ENCRYPT_INCLUDE_NONE KEX_DEFAULT_ENCRYPT \
+	",none"
 
 static char *myproposal[PROPOSAL_MAX] = {
 	KEX_DEFAULT_KEX,

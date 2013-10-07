@@ -91,7 +91,7 @@ kex_names_valid(const char *names)
 }
 
 /* put algorithm proposal into buffer */
-static void
+void
 kex_prop2buf(Buffer *b, char *proposal[PROPOSAL_MAX])
 {
 	u_int i;
@@ -418,6 +418,10 @@ kex_choose_conf(Kex *kex)
 	int nenc, nmac, ncomp;
 	u_int mode, ctos, need, authlen;
 	int first_kex_follows, type;
+	int auth_flag;
+
+	auth_flag = packet_authentication_state();
+	debug ("AUTH STATE IS %d", auth_flag);
 
 	my   = kex_buf2prop(&kex->my, NULL);
 	peer = kex_buf2prop(&kex->peer, &first_kex_follows);
@@ -455,6 +459,15 @@ kex_choose_conf(Kex *kex)
 		if (authlen == 0)
 			choose_mac(&newkeys->mac, cprop[nmac], sprop[nmac]);
 		choose_comp(&newkeys->comp, cprop[ncomp], sprop[ncomp]);
+                debug("REQUESTED ENC.NAME is '%s'", newkeys->enc.name);
+                if (strcmp(newkeys->enc.name, "none") == 0) {
+                        debug("Requesting NONE. Authflag is %d", auth_flag);
+                        if (auth_flag == 1) {
+                                debug("None requested post authentication.");
+                        } else {
+                                fatal("Pre-authentication none cipher requests are not allowed.");
+                        }
+                }
 		debug("kex: %s %s %s %s",
 		    ctos ? "client->server" : "server->client",
 		    newkeys->enc.name,
