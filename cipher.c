@@ -67,7 +67,7 @@ struct Cipher {
 	const EVP_CIPHER	*(*evptype)(void);
 };
 
-static const struct Cipher ciphers[] = {
+static struct Cipher ciphers[] = {
 	{ "none",	SSH_CIPHER_NONE, 8, 0, 0, 0, 0, 0, EVP_enc_null },
 	{ "des",	SSH_CIPHER_DES, 8, 8, 0, 0, 0, 1, EVP_des_cbc },
 	{ "3des",	SSH_CIPHER_3DES, 8, 16, 0, 0, 0, 1, evp_ssh1_3des },
@@ -169,10 +169,10 @@ cipher_mask_ssh1(int client)
 	return mask;
 }
 
-const Cipher *
+Cipher *
 cipher_by_name(const char *name)
 {
-	const Cipher *c;
+	Cipher *c;
 	for (c = ciphers; c->name != NULL; c++)
 		if (strcmp(c->name, name) == 0)
 			return c;
