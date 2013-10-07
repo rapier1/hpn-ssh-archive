@@ -49,6 +49,7 @@
 #include "dispatch.h"
 #include "monitor.h"
 #include "roaming.h"
+#include "canohost.h"
 
 #if OPENSSL_VERSION_NUMBER >= 0x00907000L
 # if defined(HAVE_EVP_SHA256)
@@ -418,6 +419,7 @@ kex_choose_conf(Kex *kex)
 	int nenc, nmac, ncomp;
 	u_int mode, ctos, need, authlen;
 	int first_kex_follows, type;
+	int log_flag = 0;
 
 	my   = kex_buf2prop(&kex->my, NULL);
 	peer = kex_buf2prop(&kex->peer, &first_kex_follows);
@@ -460,6 +462,20 @@ kex_choose_conf(Kex *kex)
 		    newkeys->enc.name,
 		    authlen == 0 ? newkeys->mac.name : "<implicit>",
 		    newkeys->comp.name);
+		/* client starts withctos = 0 && log flag = 0 and no log*/
+		/* 2nd client pass ctos=1 and flag = 1 so no log*/
+		/* server starts with ctos =1 && log_flag = 0 so log */
+		/* 2nd sever pass ctos = 1 && log flag = 1 so no log*/
+		/* -cjr*/
+		if (ctos && !log_flag) {
+			logit("SSH: Server;Ltype: Kex;Remote: %s-%d;Enc: %s;MAC: %s;Comp: %s",
+			      get_remote_ipaddr(),
+			      get_remote_port(),
+			      newkeys->enc.name,
+			      newkeys->mac.name,
+			      newkeys->comp.name);
+		}
+		log_flag = 1;
 	}
 	choose_kex(kex, cprop[PROPOSAL_KEX_ALGS], sprop[PROPOSAL_KEX_ALGS]);
 	choose_hostkeyalg(kex, cprop[PROPOSAL_SERVER_HOST_KEY_ALGS],
