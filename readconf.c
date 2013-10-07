@@ -135,6 +135,7 @@ typedef enum {
 	oTunnel, oTunnelDevice, oLocalCommand, oPermitLocalCommand,
 	oVisualHostKey, oUseRoaming, oZeroKnowledgePasswordAuthentication,
 	oKexAlgorithms, oIPQoS, oRequestTTY,
+	oTcpRcvBufPoll, oTcpRcvBuf, oHPNDisabled, oHPNBufferSize,
 	oDeprecated, oUnsupported
 } OpCodes;
 
@@ -246,6 +247,11 @@ static struct {
 	{ "kexalgorithms", oKexAlgorithms },
 	{ "ipqos", oIPQoS },
 	{ "requesttty", oRequestTTY },
+
+	{ "tcprcvbufpoll", oTcpRcvBufPoll },
+	{ "tcprcvbuf", oTcpRcvBuf },
+	{ "hpndisabled", oHPNDisabled },
+	{ "hpnbuffersize", oHPNBufferSize },
 
 	{ NULL, oBadOption }
 };
@@ -515,6 +521,18 @@ parse_flag:
 		intptr = &options->check_host_ip;
 		goto parse_flag;
 
+	case oHPNDisabled:
+		intptr = &options->hpn_disabled;
+		goto parse_flag;
+
+	case oHPNBufferSize:
+		intptr = &options->hpn_buffer_size;
+		goto parse_int;
+
+	case oTcpRcvBufPoll:
+		intptr = &options->tcp_rcv_buf_poll;
+		goto parse_flag;
+
 	case oVerifyHostKeyDNS:
 		intptr = &options->verify_host_key_dns;
 		goto parse_yesnoask;
@@ -696,6 +714,10 @@ parse_int:
 
 	case oConnectionAttempts:
 		intptr = &options->connection_attempts;
+		goto parse_int;
+
+	case oTcpRcvBuf:
+		intptr = &options->tcp_rcv_buf;
 		goto parse_int;
 
 	case oCipher:
@@ -1222,6 +1244,11 @@ initialize_options(Options * options)
 	options->ip_qos_interactive = -1;
 	options->ip_qos_bulk = -1;
 	options->request_tty = -1;
+
+	options->hpn_disabled = -1;
+	options->hpn_buffer_size = -1;
+	options->tcp_rcv_buf_poll = -1;
+	options->tcp_rcv_buf = -1;
 }
 
 /*
@@ -1345,6 +1372,28 @@ fill_default_options(Options * options)
 		options->server_alive_interval = 0;
 	if (options->server_alive_count_max == -1)
 		options->server_alive_count_max = 3;
+	if (options->hpn_disabled == -1)
+	        options->hpn_disabled = 0;
+	if (options->hpn_buffer_size > -1)
+	{
+	  /* if a user tries to set the size to 0 set it to 1KB */
+		if (options->hpn_buffer_size == 0)
+		options->hpn_buffer_size = 1;
+		/*limit the buffer to 64MB*/
+		if (options->hpn_buffer_size > 64*1024)
+		{
+			options->hpn_buffer_size = 64*1024*1024;
+			debug("User requested buffer larger than 64MB. Request reverted to 64MB");
+		}
+		else options->hpn_buffer_size *= 1024;
+		debug("hpn_buffer_size set to %d", options->hpn_buffer_size);
+	}
+	if (options->tcp_rcv_buf == 0)
+		options->tcp_rcv_buf = 1;
+	if (options->tcp_rcv_buf > -1)
+		options->tcp_rcv_buf *=1024;
+	if (options->tcp_rcv_buf_poll == -1)
+		options->tcp_rcv_buf_poll = 1;
 	if (options->control_master == -1)
 		options->control_master = 0;
 	if (options->control_persist == -1) {
