@@ -138,6 +138,9 @@ int deny_severity;
 #define REEXEC_CONFIG_PASS_FD		(STDERR_FILENO + 3)
 #define REEXEC_MIN_FREE_FD		(STDERR_FILENO + 4)
 
+int myflag = 0;
+
+
 extern char *__progname;
 
 /* Server configuration options. */
@@ -430,7 +433,7 @@ sshd_exchange_identification(int sock_in, int sock_out)
 	}
 
 	xasprintf(&server_version_string, "SSH-%d.%d-%.100s%s%s%s",
-	    major, minor, SSH_VERSION,
+	    major, minor, SSH_RELEASE,
 	    *options.version_addendum == '\0' ? "" : " ",
 	    options.version_addendum, newline);
 
@@ -481,6 +484,9 @@ sshd_exchange_identification(int sock_in, int sock_out)
 		cleanup_exit(255);
 	}
 	debug("Client protocol version %d.%d; client software version %.100s",
+	    remote_major, remote_minor, remote_version);
+	logit("SSH: Server;Ltype: Version;Remote: %s-%d;Protocol: %d.%d;Client: %.100s",
+	      get_remote_ipaddr(), get_remote_port(),
 	    remote_major, remote_minor, remote_version);
 
 	compat_datafellows(remote_version);
@@ -1038,6 +1044,8 @@ server_listen(void)
 	int ret, listen_sock, on = 1;
 	struct addrinfo *ai;
 	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
+	int socksize;
+	int socksizelen = sizeof(int);
 
 	for (ai = options.listen_addrs; ai; ai = ai->ai_next) {
 		if (ai->ai_family != AF_INET && ai->ai_family != AF_INET6)
@@ -1077,6 +1085,11 @@ server_listen(void)
 			sock_set_v6only(listen_sock);
 
 		debug("Bind to port %s on %s.", strport, ntop);
+
+		getsockopt(listen_sock, SOL_SOCKET, SO_RCVBUF,
+				   &socksize, &socksizelen);
+		debug("Server TCP RWIN socket size: %d", socksize);
+		debug("HPN Buffer Size: %d", options.hpn_buffer_size);
 
 		/* Bind the socket to the desired port. */
 		if (bind(listen_sock, ai->ai_addr, ai->ai_addrlen) < 0) {
@@ -1976,6 +1989,9 @@ main(int ac, char **av)
 	/* Log the connection. */
 	verbose("Connection from %.500s port %d", remote_ip, remote_port);
 
+	/* set the HPN options for the child */
+	channel_set_hpn(options.hpn_disabled, options.hpn_buffer_size);
+
 	/*
 	 * We don't want to listen forever unless the other side
 	 * successfully authenticates itself.  So we set up an alarm which is
@@ -2076,6 +2092,23 @@ main(int ac, char **av)
 	    options.client_alive_count_max);
 
 	/* Start session. */
+
+	/* if we are using aes-ctr there can be issues in either a fork or sandbox
+         * so the initial aes-ctr is defined to point ot the original single process
+	 * evp. After authentication we'll be past the fork and the sandboxed privsep
+	 * so we repoint the define to the multithreaded evp. To start the threads we
+	 * then force a rekey
+	 */
+        CipherContext *ccsend;
+        ccsend = (CipherContext*)packet_get_send_context();
+
+	/* only rekey if necessary. If we don't do this gcm mode cipher breaks */
+	if (strstr(cipher_return_name((Cipher*)ccsend->cipher), "ctr")) {
+		debug ("Single to Multithreaded CTR cipher swap - server request");
+		cipher_reset_multithreaded();
+		packet_request_rekeying();
+	}
+
 	do_authenticated(authctxt);
 
 	/* The connection has been terminated. */
@@ -2332,9 +2365,15 @@ do_ssh2_kex(void)
 {
 	Kex *kex;
 
+	myflag++;
+	debug ("MYFLAG IS %d", myflag);
 	if (options.ciphers != NULL) {
 		myproposal[PROPOSAL_ENC_ALGS_CTOS] =
 		myproposal[PROPOSAL_ENC_ALGS_STOC] = options.ciphers;
+        } else if (options.none_enabled == 1) {
+                debug ("WARNING: None cipher enabled");
+                myproposal[PROPOSAL_ENC_ALGS_CTOS] =
+                myproposal[PROPOSAL_ENC_ALGS_STOC] = KEX_ENCRYPT_INCLUDE_NONE;
 	}
 	myproposal[PROPOSAL_ENC_ALGS_CTOS] =
 	    compat_cipher_proposal(myproposal[PROPOSAL_ENC_ALGS_CTOS]);

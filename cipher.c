@@ -55,6 +55,13 @@ extern const EVP_CIPHER *evp_ssh1_bf(void);
 extern const EVP_CIPHER *evp_ssh1_3des(void);
 extern void ssh1_3des_iv(EVP_CIPHER_CTX *, int, u_char *, int);
 
+/* for multi-threaded aes-ctr cipher */
+extern const EVP_CIPHER *evp_aes_ctr_mt(void);
+
+/* no longer needed. replaced by evp pointer swap */
+/* extern void ssh_aes_ctr_thread_destroy(EVP_CIPHER_CTX *ctx); */
+/* extern void ssh_aes_ctr_thread_reconstruction(EVP_CIPHER_CTX *ctx); */
+
 struct Cipher {
 	char	*name;
 	int	number;		/* for ssh1 only */
@@ -97,6 +104,27 @@ struct Cipher {
 };
 
 /*--*/
+
+/* used to get the cipher name so when force rekeying to handle the 
+ * single to multithreaded ctr cipher swap we only rekey when appropriate
+*/
+char *
+cipher_return_name(const Cipher *c)
+{
+        return (c->name);
+}
+
+/* in order to get around sandbox and forking issues with a threaded cipher
+ * we set the initial pre-auth aes-ctr cipher to the default OpenSSH cipher
+ * post auth we set them to the new evp as defined by cipher-ctr-mt
+*/
+void
+cipher_reset_multithreaded()
+{
+  (cipher_by_name("aes128-ctr"))->evptype = evp_aes_ctr_mt;
+  (cipher_by_name("aes192-ctr"))->evptype = evp_aes_ctr_mt;
+  (cipher_by_name("aes256-ctr"))->evptype = evp_aes_ctr_mt;
+}
 
 u_int
 cipher_blocksize(const Cipher *c)
@@ -180,7 +208,8 @@ ciphers_valid(const char *names)
 	for ((p = strsep(&cp, CIPHER_SEP)); p && *p != '\0';
 	    (p = strsep(&cp, CIPHER_SEP))) {
 		c = cipher_by_name(p);
-		if (c == NULL || c->number != SSH_CIPHER_SSH2) {
+		if (c == NULL || (c->number != SSH_CIPHER_SSH2 &&
+				  c->number != SSH_CIPHER_NONE)) {
 			debug("bad cipher %s [%s]", p, names);
 			xfree(cipher_list);
 			return 0;
@@ -406,6 +435,7 @@ cipher_get_keyiv(CipherContext *cc, u_char *iv, u_int len)
 	int evplen;
 
 	switch (c->number) {
+	case SSH_CIPHER_NONE:
 	case SSH_CIPHER_SSH2:
 	case SSH_CIPHER_DES:
 	case SSH_CIPHER_BLOWFISH:
@@ -442,6 +472,7 @@ cipher_set_keyiv(CipherContext *cc, u_char *iv)
 	int evplen = 0;
 
 	switch (c->number) {
+	case SSH_CIPHER_NONE:
 	case SSH_CIPHER_SSH2:
 	case SSH_CIPHER_DES:
 	case SSH_CIPHER_BLOWFISH:
