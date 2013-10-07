@@ -141,6 +141,7 @@ struct Kex {
 };
 
 int	 kex_names_valid(const char *);
+void	 kex_prop2buf(Buffer *, char *proposal[PROPOSAL_MAX]);
 
 Kex	*kex_setup(char *[PROPOSAL_MAX]);
 void	 kex_finish(Kex *);
