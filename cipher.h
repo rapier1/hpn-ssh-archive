@@ -73,7 +73,7 @@ void ssh_aes_ctr_thread_destroy(EVP_CIPHER_CTX *ctx); // defined in cipher-ctr-m
 void ssh_aes_ctr_thread_reconstruction(EVP_CIPHER_CTX *ctx);
 
 u_int	 cipher_mask_ssh1(int);
-const Cipher	*cipher_by_name(const char *);
+Cipher	*cipher_by_name(const char *);
 const Cipher	*cipher_by_number(int);
 int	 cipher_number(const char *);
 char	*cipher_name(int);

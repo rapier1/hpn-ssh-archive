@@ -2087,8 +2087,3 @@ packet_restore_state(void)
 	}
 }
 
-int
-packet_authentication_state(void)
-{
-	return(active_state->after_authentication);
-}

@@ -1104,10 +1104,6 @@ process_server_config_line(ServerOptions *options, char *line,
 		intptr = &options->ignore_user_known_hosts;
 		goto parse_flag;
 
-	case sNoneEnabled:
-		intptr = &options->none_enabled;
-		goto parse_flag;
-
 	case sRhostsRSAAuthentication:
 		intptr = &options->rhosts_rsa_authentication;
 		goto parse_flag;

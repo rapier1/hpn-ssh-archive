@@ -198,20 +198,20 @@ cipher_mask_ssh1(int client)
 	return mask;
 }
 
-const Cipher *
+Cipher *
 cipher_by_name(const char *name)
 {
-	const Cipher *c;
+	Cipher *c;
 	for (c = ciphers; c->name != NULL; c++)
 		if (strcmp(c->name, name) == 0)
 			return c;
 	return NULL;
 }
 
-Cipher *
+const Cipher *
 cipher_by_number(int id)
 {
-	Cipher *c;
+	const Cipher *c;
 	for (c = ciphers; c->name != NULL; c++)
 		if (c->number == id)
 			return c;
