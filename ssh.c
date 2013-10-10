@@ -104,6 +104,7 @@
 #include "uidswap.h"
 #include "roaming.h"
 #include "version.h"
+#include "web10g.h"
 
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
@@ -249,6 +250,22 @@ main(int ac, char **av)
 	struct servent *sp;
 	Forward fwd;
 
+	/* as this is a web10g enabled client and dependent on web10g 
+	 * perform the web10g checks here so we don't waste a lot
+	 * of time doing things of no value later on
+	 */
+
+	if (!web10g_check_kernel())
+		fatal ("This version of ssh requires a web10g enabled kernel. See web10g.org");
+
+	int mod_check = web10g_check_module();
+	if (mod_check == 0)
+		fatal ("The tcp_estats_nl kernel module is not loaded. Run 'modprobe tcp_estats_nl' as root.");
+
+	if (mod_check == -1) 
+		debug ("Could not determine is tcp_estats_nl is loaded.");
+
+		
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
 

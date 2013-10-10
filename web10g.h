@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <linux/sysctl.h>
 #include <string.h>
 #include <estats/estats.h>
 #include <pthread.h>
@@ -49,6 +50,12 @@
 
 // init web10g vars
 estats_error* web10g_init();
+
+// verify kernel is web10g
+int web10g_check_kernel();
+
+// verify that tcp_estats_nl module is loaded
+int web10g_check_module();
 
 // spawns a thread that writes to a file
 void web10g_thread_file();

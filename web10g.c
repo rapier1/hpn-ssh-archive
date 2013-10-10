@@ -1,4 +1,3 @@
-
 #include "web10g.h"
 
 // web10g variables
@@ -144,6 +143,46 @@ void web10g_thread_file() {
 #endif
 }
 
+/* 
+ * verifies that the kernel is web10g aware
+ * by determining if net.ipv4.tcp_estats is
+ * found. Just do a file check in /proc/sys
+ * return int
+ */
+int web10g_check_kernel() 
+{
+	if (access("/proc/sys/net/ipv4/tcp_estats", F_OK) == 0)
+		return 1;
+	else
+		return 0;
+}
+
+/*
+ * verifies that the tcp_estats_nl kernel module is loaded
+ * basically run lsmod and grep for tcp_estats_nl
+ * return int
+ */
+int web10g_check_module()
+{
+	FILE *fp;
+	char line[80];
+	
+	/* redirect stderr if the commands are not in the */
+	/* right place we want to know */
+	/* just get the one line we care about from lsmod */
+	fp = popen("/bin/lsmod 2>&1  | /bin/grep tcp_estats_nl 2>&1", "r");
+	fgets(line, sizeof line, fp);
+	pclose(fp);
+	char *f = strstr(line, "ound"); /* command not f'ound' */
+	char *p = strstr(line, "tcp_estats_nl");
+	/* we can't run the command properly so let someone know */
+	if (f) 
+		return -1;
+	if (p)
+		return 1;
+	else
+		return 0;
+}
 
 /*
  * Returns this process's local cid.
