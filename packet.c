@@ -221,7 +221,7 @@ alloc_session_state(void)
 void
 packet_set_connection(int fd_in, int fd_out)
 {
-	const Cipher *none = cipher_by_name("none");
+	Cipher *none = cipher_by_name("none");
 
 	if (none == NULL)
 		fatal("packet_set_connection: cannot load cipher 'none'");
@@ -1929,12 +1929,24 @@ packet_send_ignore(int nbytes)
 	}
 }
 
+int rekey_requested=0;
+void
+packet_request_rekeying(void)
+{
+  rekey_requested=1;
+}
+
 #define MAX_PACKETS	(1U<<31)
 int
 packet_need_rekeying(void)
 {
 	if (datafellows & SSH_BUG_NOREKEY)
 		return 0;
+	if (rekey_requested==1)
+	{
+	  rekey_requested=0;
+	  return 1;
+	}
 	return
 	    (active_state->p_send.packets > MAX_PACKETS) ||
 	    (active_state->p_read.packets > MAX_PACKETS) ||
@@ -1998,6 +2010,18 @@ void *
 packet_get_newkeys(int mode)
 {
 	return (void *)active_state->newkeys[mode];
+}
+
+void *
+packet_get_receive_context(void)
+{
+  return (void*)&(active_state->receive_context);
+}
+
+void *
+packet_get_send_context(void)
+{
+  return (void*)&(active_state->send_context);
 }
 
 /*
