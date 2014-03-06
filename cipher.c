@@ -198,7 +198,7 @@ cipher_mask_ssh1(int client)
 	return mask;
 }
 
-const Cipher *
+Cipher *
 cipher_by_name(const char *name)
 {
 	const Cipher *c;

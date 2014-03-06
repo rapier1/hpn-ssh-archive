@@ -391,10 +391,10 @@ typedef enum {
 	sUsePrivilegeSeparation, sAllowAgentForwarding,
 	sZeroKnowledgePasswordAuthentication, sHostCertificate,
 	sRevokedKeys, sTrustedUserCAKeys, sAuthorizedPrincipalsFile,
-	sTcpRcvBufPoll, sHPNDisabled, sHPNBufferSize,
+	sTcpRcvBufPoll, sHPNDisabled, sHPNBufferSize, sNoneEnabled,
 	sKexAlgorithms, sIPQoS, sVersionAddendum,
 	sAuthorizedKeysCommand, sAuthorizedKeysCommandUser,
-	sAuthenticationMethods, sNoneEnabled, sHostKeyAgent,
+	sAuthenticationMethods, sHostKeyAgent,
 	sDeprecated, sUnsupported
 } ServerOpCodes;
 
