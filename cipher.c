@@ -208,7 +208,7 @@ cipher_by_name(const char *name)
 	return NULL;
 }
 
-const Cipher *
+Cipher *
 cipher_by_number(int id)
 {
 	const Cipher *c;
