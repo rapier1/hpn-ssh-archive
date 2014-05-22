@@ -63,7 +63,7 @@ for s in 5 10; do
 	verbose "client rekeylimit default ${s}"
 	rm -f ${COPY} ${LOG}
 	${SSH} < ${DATA} -oCompression=no -oRekeyLimit="default $s" -F \
-			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+		$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi
