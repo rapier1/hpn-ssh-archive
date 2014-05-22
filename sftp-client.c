@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp-client.c,v 1.113 2014/01/17 00:21:06 djm Exp $ */
+/* $OpenBSD: sftp-client.c,v 1.114 2014/01/31 16:39:19 tedu Exp $ */
 /*
  * Copyright (c) 2001-2004 Damien Miller <djm@openbsd.org>
  *
@@ -310,7 +310,7 @@ get_decode_statvfs(struct sftp_conn *conn, struct sftp_statvfs *st,
 		    SSH2_FXP_EXTENDED_REPLY, type);
 	}
 
-	bzero(st, sizeof(*st));
+	memset(st, 0, sizeof(*st));
 	st->f_bsize = buffer_get_int64(&msg);
 	st->f_frsize = buffer_get_int64(&msg);
 	st->f_blocks = buffer_get_int64(&msg);
@@ -567,7 +567,7 @@ do_lsreaddir(struct sftp_conn *conn, char *path, int print_flag,
 		free_sftp_dirents(*dir);
 		*dir = NULL;
 	} else if (interrupted && dir != NULL && *dir != NULL) {
-	/* Don't return partial matches on interrupt */
+		/* Don't return partial matches on interrupt */
 		free_sftp_dirents(*dir);
 		*dir = xcalloc(1, sizeof(**dir));
 		**dir = NULL;

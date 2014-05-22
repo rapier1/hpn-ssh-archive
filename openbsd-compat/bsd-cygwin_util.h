@@ -48,6 +48,7 @@ extern void cygwin_set_impersonation_token (const HANDLE);
 #include <sys/cygwin.h>
 #include <io.h>
 
+
 int binary_open(const char *, int , ...);
 int check_ntsec(const char *);
 char **fetch_windows_environment(void);
