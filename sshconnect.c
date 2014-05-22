@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect.c,v 1.244 2014/01/09 23:26:48 djm Exp $ */
+/* $OpenBSD: sshconnect.c,v 1.246 2014/02/06 22:21:01 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -134,7 +134,7 @@ ssh_proxy_fdpass_connect(const char *host, u_short port,
 		if (sp[0] != 1) {
 			if (dup2(sp[0], 1) < 0)
 				perror("dup2 stdout");
-	}
+		}
 		if (sp[0] >= 2)
 			close(sp[0]);
 
@@ -174,9 +174,9 @@ ssh_proxy_fdpass_connect(const char *host, u_short port,
 	return 0;
 }
 
-	/*
+/*
  * Connect to the given ssh server using a proxy command.
-	 */
+ */
 static int
 ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 {
@@ -294,7 +294,7 @@ static int
 ssh_create_socket(int privileged, struct addrinfo *ai)
 {
 	int sock, r, gaierr;
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res = NULL;
 
 	sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 	if (sock < 0) {
@@ -310,17 +310,19 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 	if (options.bind_address == NULL && !privileged)
 		return sock;
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = ai->ai_family;
-	hints.ai_socktype = ai->ai_socktype;
-	hints.ai_protocol = ai->ai_protocol;
-	hints.ai_flags = AI_PASSIVE;
-	gaierr = getaddrinfo(options.bind_address, NULL, &hints, &res);
-	if (gaierr) {
-		error("getaddrinfo: %s: %s", options.bind_address,
-		    ssh_gai_strerror(gaierr));
-		close(sock);
-		return -1;
+	if (options.bind_address) {
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = ai->ai_family;
+		hints.ai_socktype = ai->ai_socktype;
+		hints.ai_protocol = ai->ai_protocol;
+		hints.ai_flags = AI_PASSIVE;
+		gaierr = getaddrinfo(options.bind_address, NULL, &hints, &res);
+		if (gaierr) {
+			error("getaddrinfo: %s: %s", options.bind_address,
+			    ssh_gai_strerror(gaierr));
+			close(sock);
+			return -1;
+		}
 	}
 	/*
 	 * If we are running as root and want to connect to a privileged
@@ -328,7 +330,7 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 	 */
 	if (privileged) {
 		PRIV_START;
-		r = bindresvport_sa(sock, res->ai_addr);
+		r = bindresvport_sa(sock, res ? res->ai_addr : NULL);
 		PRIV_END;
 		if (r < 0) {
 			error("bindresvport_sa: af=%d %s", ai->ai_family,
@@ -336,16 +338,17 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 			goto fail;
 		}
 	} else {
-	if (bind(sock, res->ai_addr, res->ai_addrlen) < 0) {
+		if (bind(sock, res->ai_addr, res->ai_addrlen) < 0) {
 			error("bind: %s: %s", options.bind_address,
 			    strerror(errno));
  fail:
-		close(sock);
+			close(sock);
+			freeaddrinfo(res);
+			return -1;
+		}
+	}
+	if (res != NULL)
 		freeaddrinfo(res);
-		return -1;
-	}
-	}
-	freeaddrinfo(res);
 	return sock;
 }
 
@@ -1327,7 +1330,7 @@ ssh_put_password(char *password)
 	padded = xcalloc(1, size);
 	strlcpy(padded, password, size);
 	packet_put_string(padded, size);
-	memset(padded, 0, size);
+	explicit_bzero(padded, size);
 	free(padded);
 }
 

@@ -681,7 +681,7 @@ process_open(u_int32_t id)
 	    ((flags & O_ACCMODE) == O_WRONLY ||
 	    (flags & O_ACCMODE) == O_RDWR)) {
 		verbose("Refusing open request in read-only mode");
-		status = SSH2_FX_PERMISSION_DENIED;
+	  	status = SSH2_FX_PERMISSION_DENIED;
 	} else {
 		fd = open(name, flags, mode);
 		if (fd < 0) {
@@ -1069,8 +1069,8 @@ process_remove(u_int32_t id)
 	name = get_string(NULL);
 	debug3("request %u: remove", id);
 	logit("remove name \"%s\"", name);
-		ret = unlink(name);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = unlink(name);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(name);
 }
@@ -1088,8 +1088,8 @@ process_mkdir(u_int32_t id)
 	    a->perm & 07777 : 0777;
 	debug3("request %u: mkdir", id);
 	logit("mkdir name \"%s\" mode 0%o", name, mode);
-		ret = mkdir(name, mode);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = mkdir(name, mode);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(name);
 }
@@ -1103,8 +1103,8 @@ process_rmdir(u_int32_t id)
 	name = get_string(NULL);
 	debug3("request %u: rmdir", id);
 	logit("rmdir name \"%s\"", name);
-		ret = rmdir(name);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = rmdir(name);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(name);
 }
@@ -1225,8 +1225,8 @@ process_symlink(u_int32_t id)
 	debug3("request %u: symlink", id);
 	logit("symlink old \"%s\" new \"%s\"", oldpath, newpath);
 	/* this will fail if 'newpath' exists */
-		ret = symlink(oldpath, newpath);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = symlink(oldpath, newpath);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(oldpath);
 	free(newpath);
@@ -1242,8 +1242,8 @@ process_extended_posix_rename(u_int32_t id)
 	newpath = get_string(NULL);
 	debug3("request %u: posix-rename", id);
 	logit("posix-rename old \"%s\" new \"%s\"", oldpath, newpath);
-		ret = rename(oldpath, newpath);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = rename(oldpath, newpath);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(oldpath);
 	free(newpath);
@@ -1295,8 +1295,8 @@ process_extended_hardlink(u_int32_t id)
 	newpath = get_string(NULL);
 	debug3("request %u: hardlink", id);
 	logit("hardlink old \"%s\" new \"%s\"", oldpath, newpath);
-		ret = link(oldpath, newpath);
-		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	ret = link(oldpath, newpath);
+	status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
 	free(oldpath);
 	free(newpath);
@@ -1330,7 +1330,7 @@ process_extended(u_int32_t id)
 		if (strcmp(request, extended_handlers[i].ext_name) == 0) {
 			if (!request_permitted(&extended_handlers[i]))
 				send_status(id, SSH2_FX_PERMISSION_DENIED);
-	else
+			else
 				extended_handlers[i].handler(id);
 			break;
 		}
@@ -1366,6 +1366,7 @@ process(void)
 	buffer_consume(&iqueue, 4);
 	buf_len -= 4;
 	type = buffer_get_char(&iqueue);
+
 	switch (type) {
 	case SSH2_FXP_INIT:
 		process_init();
@@ -1389,8 +1390,8 @@ process(void)
 				} else {
 					handlers[i].handler(id);
 				}
-		break;
-	}
+				break;
+			}
 		}
 		if (handlers[i].handler == NULL)
 			error("Unknown message %u", type);
