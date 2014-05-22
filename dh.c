@@ -263,7 +263,7 @@ dh_gen_key(DH *dh, int need)
 	if ((pbits = BN_num_bits(dh->p)) <= 0)
 		fatal("%s: bits(p) <= 0", __func__);
 	dh->length = MIN(need * 2, pbits - 1);
-		if (DH_generate_key(dh) == 0)
+	if (DH_generate_key(dh) == 0)
 		fatal("%s: key generation failed", __func__);
 	if (!dh_pub_is_valid(dh, dh->pub_key))
 		fatal("%s: generated invalid key", __func__);
