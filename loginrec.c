@@ -324,7 +324,6 @@ login_get_lastlog(struct logininfo *li, const uid_t uid)
 		return (NULL);
 }
 
-
 /*
  * login_alloc_entry(int, char*, char*, char*)    - Allocate and initialise
  *                                                  a logininfo structure

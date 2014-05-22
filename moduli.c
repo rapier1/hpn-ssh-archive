@@ -616,11 +616,11 @@ prime_test(FILE *in, FILE *out, u_int32_t trials, u_int32_t generator_wanted,
 	lp = xmalloc(QLINESIZE + 1);
 	while (fgets(lp, QLINESIZE + 1, in) != NULL && count_in < end_lineno) {
 		count_in++;
-			if (count_in <= last_processed) {
+		if (count_in <= last_processed) {
 			debug3("skipping line %u, before checkpoint or "
 			    "specified start line", count_in);
-				continue;
-			}
+			continue;
+		}
 		if (checkpoint_file != NULL)
 			write_checkpoint(checkpoint_file, count_in);
 		print_progress(start_lineno, count_in, end_lineno);
