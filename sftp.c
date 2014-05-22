@@ -701,7 +701,7 @@ process_put(struct sftp_conn *conn, char *src, char *dst, char *pwd,
 			error("stat %s: %s", g.gl_pathv[i], strerror(errno));
 			continue;
 		}
-		
+
 		tmp = xstrdup(g.gl_pathv[i]);
 		if ((filename = basename(tmp)) == NULL) {
 			error("basename %s: %s", tmp, strerror(errno));
@@ -1031,7 +1031,7 @@ undo_glob_escape(char *s)
  *
  * If "lastquote" is not NULL, the quoting character used for the last
  * argument is placed in *lastquote ("\0", "'" or "\"").
- * 
+ *
  * If "terminated" is not NULL, *terminated will be set to 1 when the
  * last argument's quote has been properly terminated or 0 otherwise.
  * This parameter is only of use if "sloppy" is set.
@@ -1080,7 +1080,7 @@ makeargv(const char *arg, int *argcp, int sloppy, char *lastquote,
 				state = q;
 				if (lastquote != NULL)
 					*lastquote = arg[i];
-			} else if (state == MA_UNQUOTED) 
+			} else if (state == MA_UNQUOTED)
 				state = q;
 			else if (state == q)
 				state = MA_UNQUOTED;
@@ -1428,7 +1428,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 		sflag = 1;
 	case I_LINK:
 		if (!sflag)
-		path1 = make_absolute(path1, *pwd);
+			path1 = make_absolute(path1, *pwd);
 		path2 = make_absolute(path2, *pwd);
 		err = (sflag ? do_symlink : do_hardlink)(conn, path1, path2);
 		break;
@@ -1639,7 +1639,7 @@ complete_display(char **list, u_int len)
 	char *tmp;
 
 	/* Count entries for sort and find longest */
-	for (y = 0; list[y]; y++) 
+	for (y = 0; list[y]; y++)
 		m = MAX(m, strlen(list[y]));
 
 	if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1)
@@ -1684,8 +1684,8 @@ complete_ambiguous(const char *word, char **list, size_t count)
 		for (y = 1; list[y]; y++) {
 			u_int x;
 
-			for (x = 0; x < matchlen; x++) 
-				if (list[0][x] != list[y][x]) 
+			for (x = 0; x < matchlen; x++)
+				if (list[0][x] != list[y][x])
 					break;
 
 			matchlen = x;
@@ -1697,7 +1697,7 @@ complete_ambiguous(const char *word, char **list, size_t count)
 			tmp[matchlen] = '\0';
 			return tmp;
 		}
-	} 
+	}
 
 	return xstrdup(word);
 }
@@ -1717,12 +1717,12 @@ complete_cmd_parse(EditLine *el, char *cmd, int lastarg, char quote,
 	if (cmd == NULL) {
 		for (y = 0; cmds[y].c; y++)
 			list[count++] = xstrdup(cmds[y].c);
-		
+
 		list[count] = NULL;
 		complete_display(list, 0);
 
-		for (y = 0; list[y] != NULL; y++)  
-			free(list[y]);	
+		for (y = 0; list[y] != NULL; y++)
+			free(list[y]);
 		free(list);
 		return count;
 	}
@@ -1730,7 +1730,7 @@ complete_cmd_parse(EditLine *el, char *cmd, int lastarg, char quote,
 	/* Prepare subset of commands that start with "cmd" */
 	cmdlen = strlen(cmd);
 	for (y = 0; cmds[y].c; y++)  {
-		if (!strncasecmp(cmd, cmds[y].c, cmdlen)) 
+		if (!strncasecmp(cmd, cmds[y].c, cmdlen))
 			list[count++] = xstrdup(cmds[y].c);
 	}
 	list[count] = NULL;
@@ -1745,8 +1745,8 @@ complete_cmd_parse(EditLine *el, char *cmd, int lastarg, char quote,
 	if (count > 1)
 		complete_display(list, 0);
 
-	for (y = 0; list[y]; y++)  
-		free(list[y]);	
+	for (y = 0; list[y]; y++)
+		free(list[y]);
 	free(list);
 
 	if (tmp != NULL) {
@@ -1786,7 +1786,7 @@ complete_is_remote(char *cmd) {
 		return -1;
 
 	for (i = 0; cmds[i].c; i++) {
-		if (!strncasecmp(cmd, cmds[i].c, strlen(cmds[i].c))) 
+		if (!strncasecmp(cmd, cmds[i].c, strlen(cmds[i].c)))
 			return cmds[i].t;
 	}
 
@@ -1803,7 +1803,7 @@ complete_match(EditLine *el, struct sftp_conn *conn, char *remote_path,
 	u_int i, hadglob, pwdlen, len, tmplen, filelen, cesc, isesc, isabs;
 	int clen;
 	const LineInfo *lf;
-	
+
 	/* Glob from "file" location */
 	if (file == NULL)
 		tmp = xstrdup("*");
@@ -1817,9 +1817,9 @@ complete_match(EditLine *el, struct sftp_conn *conn, char *remote_path,
 	if (remote != LOCAL) {
 		tmp = make_absolute(tmp, remote_path);
 		remote_glob(conn, tmp, GLOB_DOOFFS|GLOB_MARK, NULL, &g);
-	} else 
+	} else
 		glob(tmp, GLOB_DOOFFS|GLOB_MARK, NULL, &g);
-	
+
 	/* Determine length of pwd so we can trim completion display */
 	for (hadglob = tmplen = pwdlen = 0; tmp[tmplen] != 0; tmplen++) {
 		/* Terminate counting on first unescaped glob metacharacter */
@@ -1835,7 +1835,7 @@ complete_match(EditLine *el, struct sftp_conn *conn, char *remote_path,
 	}
 	free(tmp);
 
-	if (g.gl_matchc == 0) 
+	if (g.gl_matchc == 0)
 		goto out;
 
 	if (g.gl_matchc > 1)
@@ -1868,7 +1868,7 @@ complete_match(EditLine *el, struct sftp_conn *conn, char *remote_path,
 
 	if (tmplen > (filelen - cesc)) {
 		tmp2 = tmp + filelen - cesc;
-		len = strlen(tmp2); 
+		len = strlen(tmp2);
 		/* quote argument on way out */
 		for (i = 0; i < len; i += clen) {
 			if ((clen = mblen(tmp2 + i, len - i)) < 0 ||
@@ -1924,7 +1924,7 @@ complete_match(EditLine *el, struct sftp_conn *conn, char *remote_path,
 static unsigned char
 complete(EditLine *el, int ch)
 {
-	char **argv, *line, quote; 
+	char **argv, *line, quote;
 	int argc, carg;
 	u_int cursor, len, terminated, ret = CC_ERROR;
 	const LineInfo *lf;
@@ -1963,7 +1963,7 @@ complete(EditLine *el, int ch)
 	} else if (carg == 1 && cursor > 0 && line[cursor - 1] != ' ')  {
 		/* Handle the command parsing */
 		if (complete_cmd_parse(el, argv[0], argc == carg,
-		    quote, terminated) != 0) 
+		    quote, terminated) != 0)
 			ret = CC_REDISPLAY;
 	} else if (carg >= 1) {
 		/* Handle file parsing */
@@ -1976,11 +1976,11 @@ complete(EditLine *el, int ch)
 		if (remote != 0 &&
 		    complete_match(el, complete_ctx->conn,
 		    *complete_ctx->remote_pathp, filematch,
-		    remote, carg == argc, quote, terminated) != 0) 
+		    remote, carg == argc, quote, terminated) != 0)
 			ret = CC_REDISPLAY;
 	}
 
-	free(line);	
+	free(line);
 	return ret;
 }
 #endif /* USE_LIBEDIT */
@@ -2014,7 +2014,7 @@ interactive_loop(struct sftp_conn *conn, char *file1, char *file2)
 		el_source(el, NULL);
 
 		/* Tab Completion */
-		el_set(el, EL_ADDFN, "ftp-complete", 
+		el_set(el, EL_ADDFN, "ftp-complete",
 		    "Context sensitive argument completion", complete);
 		complete_ctx.conn = conn;
 		complete_ctx.remote_pathp = &remote_path;

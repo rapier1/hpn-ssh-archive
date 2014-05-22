@@ -227,7 +227,7 @@ pkcs11_rsa_private_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa,
 	CK_OBJECT_HANDLE	obj;
 	CK_ULONG		tlen = 0;
 	CK_RV			rv;
-	CK_OBJECT_CLASS		private_key_class = CKO_PRIVATE_KEY;
+	CK_OBJECT_CLASS	private_key_class = CKO_PRIVATE_KEY;
 	CK_BBOOL		true_val = CK_TRUE;
 	CK_MECHANISM		mech = {
 		CKM_RSA_PKCS, NULL_PTR, 0
@@ -392,7 +392,7 @@ static int
 pkcs11_fetch_keys(struct pkcs11_provider *p, CK_ULONG slotidx,
     Key ***keysp, int *nkeys)
 {
-	CK_OBJECT_CLASS		pubkey_class = CKO_PUBLIC_KEY;
+	CK_OBJECT_CLASS	pubkey_class = CKO_PUBLIC_KEY;
 	CK_OBJECT_CLASS	cert_class = CKO_CERTIFICATE;
 	CK_ATTRIBUTE		pubkey_filter[] = {
 		{ CKA_CLASS, NULL, sizeof(pubkey_class) }
@@ -490,12 +490,12 @@ pkcs11_fetch_keys_filter(struct pkcs11_provider *p, CK_ULONG slotidx,
 			error("C_GetAttributeValue failed: %lu", rv);
 		} else if (attribs[1].type == CKA_MODULUS ) {
 			if ((rsa = RSA_new()) == NULL) {
-			error("RSA_new failed");
-		} else {
-			rsa->n = BN_bin2bn(attribs[1].pValue,
-			    attribs[1].ulValueLen, NULL);
-			rsa->e = BN_bin2bn(attribs[2].pValue,
-			    attribs[2].ulValueLen, NULL);
+				error("RSA_new failed");
+			} else {
+				rsa->n = BN_bin2bn(attribs[1].pValue,
+				    attribs[1].ulValueLen, NULL);
+				rsa->e = BN_bin2bn(attribs[2].pValue,
+				    attribs[2].ulValueLen, NULL);
 			}
 		} else {
 			cp = attribs[2].pValue;
@@ -516,11 +516,11 @@ pkcs11_fetch_keys_filter(struct pkcs11_provider *p, CK_ULONG slotidx,
 				X509_free(x509);
 		}
 		if (rsa && rsa->n && rsa->e &&
-			    pkcs11_rsa_wrap(p, slotidx, &attribs[0], rsa) == 0) {
-				key = key_new(KEY_UNSPEC);
-				key->rsa = rsa;
-				key->type = KEY_RSA;
-				key->flags |= KEY_FLAG_EXT;
+		    pkcs11_rsa_wrap(p, slotidx, &attribs[0], rsa) == 0) {
+			key = key_new(KEY_UNSPEC);
+			key->rsa = rsa;
+			key->type = KEY_RSA;
+			key->flags |= KEY_FLAG_EXT;
 			if (pkcs11_key_included(keysp, nkeys, key)) {
 				key_free(key);
 			} else {
