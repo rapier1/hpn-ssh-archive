@@ -1,4 +1,4 @@
-/* $OpenBSD: authfd.c,v 1.91 2013/12/29 04:29:25 djm Exp $ */
+/* $OpenBSD: authfd.c,v 1.92 2014/01/31 16:39:19 tedu Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -42,8 +42,8 @@
 #include <sys/socket.h>
 
 #include <openssl/evp.h>
-
 #include <openssl/crypto.h>
+
 #include <fcntl.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -102,7 +102,7 @@ ssh_get_authentication_socket(void)
 	if (!authsocket)
 		return -1;
 
-	bzero(&sunaddr, sizeof(sunaddr));
+	memset(&sunaddr, 0, sizeof(sunaddr));
 	sunaddr.sun_family = AF_UNIX;
 	strlcpy(sunaddr.sun_path, authsocket, sizeof(sunaddr.sun_path));
 

@@ -43,7 +43,7 @@ copy_statfs_to_statvfs(struct statvfs *to, struct statfs *from)
 	to->f_namemax = MNAMELEN;
 }
 
-#ifndef HAVE_STATVFS
+# ifndef HAVE_STATVFS
 int statvfs(const char *path, struct statvfs *buf)
 {
 #  ifdef HAVE_STATFS
@@ -59,9 +59,9 @@ int statvfs(const char *path, struct statvfs *buf)
 	return -1;
 #  endif
 }
-#endif
+# endif
 
-#ifndef HAVE_FSTATVFS
+# ifndef HAVE_FSTATVFS
 int fstatvfs(int fd, struct statvfs *buf)
 {
 #  ifdef HAVE_FSTATFS
@@ -77,6 +77,6 @@ int fstatvfs(int fd, struct statvfs *buf)
 	return -1;
 #  endif
 }
-#endif
+# endif
 
 #endif
