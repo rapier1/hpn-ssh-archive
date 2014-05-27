@@ -219,7 +219,7 @@ cipher_mask_ssh1(int client)
 	return mask;
 }
 
-const Cipher *
+Cipher *
 cipher_by_name(const char *name)
 {
 	const Cipher *c;
@@ -229,7 +229,7 @@ cipher_by_name(const char *name)
 	return NULL;
 }
 
-Cipher *
+const Cipher *
 cipher_by_number(int id)
 {
 	Cipher *c;

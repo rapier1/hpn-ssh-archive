@@ -1030,7 +1030,6 @@ packet_send2(void)
 			TAILQ_REMOVE(&active_state->outgoing, p, next);
 			free(p);
 			packet_length += packet_send2_wrapped();
-			packet_send2_wrapped();
 		}
 	}
 	return(packet_length);
