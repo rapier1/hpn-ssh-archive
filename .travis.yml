@@ -1,0 +1,4 @@
+language: c
+compiler: gcc
+# Change this to your needs
+script: ./configure && make
